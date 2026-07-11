@@ -43,8 +43,29 @@ function Read-Config {
   try { $jsonc | ConvertFrom-Json } catch { $null }
 }
 
+$BinDir = Join-Path $env:LOCALAPPDATA 'cloak\bin'
+$Shim   = Join-Path $BinDir 'cloak.cmd'
+function Add-ToPath {
+  New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
+  # A tiny .cmd shim so `cloak <args>` works from any shell. Absolute paths so
+  # it doesn't depend on pwsh being on PATH or the repo location.
+  "@echo off`r`n`"$(Get-Pwsh)`" -NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $Repo 'cloak.ps1')`" %*" |
+    Set-Content -Path $Shim -Encoding ASCII
+  $userPath = [Environment]::GetEnvironmentVariable('Path','User')
+  if (($userPath -split ';') -notcontains $BinDir) {
+    [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + $BinDir), 'User')
+    Ok "added 'cloak' to PATH (open a new terminal to use it)"
+  } else { Ok "'cloak' command ready" }
+}
+function Remove-FromPath {
+  if (Test-Path $Shim) { Remove-Item $Shim -Force }
+  $userPath = [Environment]::GetEnvironmentVariable('Path','User')
+  $kept = ($userPath -split ';' | Where-Object { $_ -and $_ -ne $BinDir }) -join ';'
+  if ($kept -ne $userPath) { [Environment]::SetEnvironmentVariable('Path', $kept, 'User'); Ok "removed 'cloak' from PATH" }
+}
+
 Write-Host ""
-Write-Host "cloak installer" -ForegroundColor Magenta
+Write-Host "cloak" -ForegroundColor Magenta
 
 if ($Status) {
   Head "status"
@@ -66,6 +87,7 @@ if ($Uninstall) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
     Ok "removed scheduled task"
   } else { Info "no scheduled task to remove" }
+  Remove-FromPath
   if (-not (Get-Process OneDrive -ErrorAction SilentlyContinue)) {
     $exe = @("$env:LOCALAPPDATA\Microsoft\OneDrive\OneDrive.exe","C:\Program Files\Microsoft OneDrive\OneDrive.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
     if ($exe) { Start-Process $exe -ArgumentList '/background'; Ok "resumed OneDrive" }
@@ -168,6 +190,9 @@ Start-Sleep -Seconds 3
 if ((Daemon-Pids).Count) { Ok "daemon running" }
 else { Bad "daemon did not start. run it manually to see why:  pwsh -File `"$Daemon`"" }
 
+Add-ToPath
+
 Write-Host ""
 Write-Host "installed. work normally; OneDrive pauses while you work and syncs when you go idle." -ForegroundColor Cyan
+Write-Host "manage it with:  cloak status  |  cloak stop  |  cloak uninstall" -ForegroundColor DarkGray
 Write-Host ""

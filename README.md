@@ -19,12 +19,15 @@ cd cloak
 pwsh -File install.ps1
 ```
 
-The installer asks for your projects folder, writes the config, and registers
-the daemon to start at logon.
+The installer asks for your projects folder, writes the config, registers the
+daemon to start at logon, and adds a `cloak` command to your PATH. Open a new
+terminal and:
 
 ```powershell
-pwsh -File install.ps1 -Status      # what's running
-pwsh -File install.ps1 -Uninstall   # clean removal
+cloak status       # daemon / OneDrive state + recent log
+cloak stop         # pause the daemon
+cloak log -Follow  # watch it live
+cloak uninstall    # clean removal
 ```
 
 ## How it behaves
@@ -51,10 +54,18 @@ warns you about this.
 
 Logs: `%LOCALAPPDATA%\cloak\cloakd.log`
 
-## Extras
+## Junction mode
 
-- `cloak.ps1`: manual mode. Moves a folder to local disk and leaves a junction,
-  making it fully invisible to OneDrive until you turn it back off
-  (`on` / `off` / `status` / `restore-all`).
-- `probe.ps1`: tests how your OneDrive treats junctions. Touches nothing but a
-  throwaway folder.
+For when you want a folder *fully* invisible to OneDrive (not just paused): it
+moves the folder to local disk and leaves a junction in its place, so nothing
+inside syncs until you turn it back off.
+
+```powershell
+cloak on <path>       # hide a folder
+cloak off <path>      # restore it (OneDrive re-syncs)
+cloak list            # what's hidden
+cloak restore-all     # restore everything
+```
+
+`cloak probe` tests how your OneDrive treats junctions before you rely on this,
+touching nothing but a throwaway folder.
