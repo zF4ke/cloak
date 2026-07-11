@@ -55,12 +55,23 @@ function Is-Junction($p) {
   (Test-Path $p) -and ((([int](Get-Item $p -Force).Attributes) -band 0x400) -ne 0)
 }
 
-# Scratch path on the SAME volume as the target (instant rename). LOCALAPPDATA
-# when the target shares its volume, otherwise a hidden dir at the volume root.
+# Scratch path on the SAME volume as the target (instant rename). Uses
+# scratchDir from config.jsonc when set and on the right volume; otherwise
+# LOCALAPPDATA, or a hidden dir at the target's volume root.
 function Scratch-For($target) {
   $tvol = Split-Path -Qualifier $target
   $lvol = Split-Path -Qualifier $env:LOCALAPPDATA
-  $base = if ($tvol -eq $lvol) { Join-Path $env:LOCALAPPDATA 'cloak\scratch' } else { Join-Path "$tvol\" '.cloak-scratch' }
+  $cfgScratch = $null
+  $cfgPath = Join-Path $PSScriptRoot 'config.jsonc'
+  if (Test-Path $cfgPath) {
+    try {
+      $jsonc = (Get-Content $cfgPath -Raw) -replace '(?m)^\s*//.*$','' -replace '(?s)/\*.*?\*/',''
+      $cfgScratch = ($jsonc | ConvertFrom-Json).scratchDir
+    } catch {}
+  }
+  $base = if ($cfgScratch -and (Split-Path -Qualifier $cfgScratch) -eq $tvol) { $cfgScratch }
+          elseif ($tvol -eq $lvol) { Join-Path $env:LOCALAPPDATA 'cloak\scratch' }
+          else { Join-Path "$tvol\" '.cloak-scratch' }
   $name = (Split-Path $target -Leaf)
   $hash = ([BitConverter]::ToString(
              (New-Object Security.Cryptography.SHA1Managed).ComputeHash(

@@ -50,10 +50,8 @@ function CloudTouched([int]$a) {
 }
 
 Write-Host ""
-Write-Host "  ┌─────────────────────────────────────────────┐" -ForegroundColor Magenta
-Write-Host "  │  cloak · probe                              │" -ForegroundColor Magenta
-Write-Host "  │  how does OneDrive treat junctions here?    │" -ForegroundColor Magenta
-Write-Host "  └─────────────────────────────────────────────┘" -ForegroundColor Magenta
+Write-Host "cloak probe" -ForegroundColor Magenta
+Write-Host "how does OneDrive treat junctions on this machine?" -ForegroundColor DarkGray
 
 # ---------- environment ----------
 Step "Environment"
