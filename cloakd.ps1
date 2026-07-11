@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 <#
-  cloakd — cloak's background daemon (pause mode).
+  cloakd - cloak's background daemon (pause mode).
 
   Watches configurable project roots. On file activity: gracefully shuts down
   OneDrive so it can't dehydrate, lock, or serve stale reads while tools work.
@@ -49,19 +49,19 @@ function Pause-OneDrive {
   # /shutdown takes ~14s to complete; don't spam it while one is in flight.
   if (((Get-Date) - $script:shutdownSentAt).TotalSeconds -lt 30) { return }
   $script:shutdownSentAt = Get-Date
-  Log "activity detected → pausing OneDrive (graceful shutdown, ~15s)" Yellow
+  Log "activity detected -> pausing OneDrive (graceful shutdown, ~15s)" Yellow
   Start-Process $oneDriveExe -ArgumentList '/shutdown' -WindowStyle Hidden
 }
 
 function Resume-OneDrive {
   if (OneDrive-Running) { return }
-  Log "idle → resuming OneDrive (sync will catch up)" Green
+  Log "idle -> resuming OneDrive (sync will catch up)" Green
   Start-Process $oneDriveExe -ArgumentList '/background'
 }
 
 # ---------- activity watchers ----------
 # Shared state: event actions run in their own dynamic module, so a plain
-# $script: variable is NOT visible from them — use a synchronized hashtable
+# $script: variable is NOT visible from them - use a synchronized hashtable
 # handed in via MessageData.
 $shared = [hashtable]::Synchronized(@{ last = [DateTime]::MinValue })
 $ignoreRegex = if ($ignoreDirs.Count) {
@@ -89,7 +89,7 @@ foreach ($root in $watchRoots) {
   Log "watching $root" Cyan
 }
 
-Log ("cloakd up · idle={0}s · maxPause={1}m · OneDrive: {2}" -f $idleSeconds, $maxPause.TotalMinutes, $(if (OneDrive-Running) {'running'} else {'stopped'})) Magenta
+Log ("cloakd up - idle={0}s - maxPause={1}m - OneDrive: {2}" -f $idleSeconds, $maxPause.TotalMinutes, $(if (OneDrive-Running) {'running'} else {'stopped'})) Magenta
 
 # ---------- main loop ----------
 $pausedAt = $null            # when we shut OneDrive down (null = not paused by us)
@@ -113,7 +113,7 @@ try {
         $pausedLong = ($now - $pausedAt) -ge $maxPause
         $quiet = $idleFor.TotalSeconds -ge $idleSeconds
         if ($quiet -or $pausedLong) {
-          if ($pausedLong -and -not $quiet) { Log "maxPause reached under continuous activity → brief resume so backup can't go stale" Yellow }
+          if ($pausedLong -and -not $quiet) { Log "maxPause reached under continuous activity -> brief resume so backup can't go stale" Yellow }
           Resume-OneDrive
           $pausedAt = $null
           if ($pausedLong -and -not $quiet) {
@@ -133,7 +133,7 @@ finally {
   foreach ($h in $handlers) { Unregister-Event -SourceIdentifier $h.Name -ErrorAction SilentlyContinue }
   foreach ($w in $watchers) { $w.EnableRaisingEvents = $false; $w.Dispose() }
   if (-not (OneDrive-Running)) {
-    Log "daemon exiting → resuming OneDrive (fail-safe)" Green
+    Log "daemon exiting -> resuming OneDrive (fail-safe)" Green
     Start-Process $oneDriveExe -ArgumentList '/background'
   }
   Log "cloakd stopped" Magenta

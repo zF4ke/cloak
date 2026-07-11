@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 <#
-  cloak — isolate a OneDrive-synced folder behind a junction while you work.
+  cloak - isolate a OneDrive-synced folder behind a junction while you work.
 
   Commands:
     cloak.ps1 on   <path>     Cloak: move bytes to local scratch, junction in place.
@@ -12,7 +12,7 @@
     - Scratch lives on the SAME volume as the target, so cloak/uncloak is an
       instant metadata move, never a copy.
     - State is recorded BEFORE the junction is created and cleared AFTER restore,
-      so a crash never loses data — restore-all reconciles on next run.
+      so a crash never loses data - restore-all reconciles on next run.
     - `off` and `restore-all` remove ONLY the junction (never the target), then
       move the real bytes back.
 #>
@@ -30,10 +30,10 @@ $StateDir  = Join-Path $env:LOCALAPPDATA 'cloak'
 $StateFile = Join-Path $StateDir 'state.json'
 $Host_     = $env:COMPUTERNAME
 
-function Ok($t)   { Write-Host "  ✓ $t" -ForegroundColor Green }
+function Ok($t)   { Write-Host "  + $t" -ForegroundColor Green }
 function Warn($t) { Write-Host "  ! $t" -ForegroundColor Yellow }
-function Bad($t)  { Write-Host "  ✗ $t" -ForegroundColor Red }
-function Info($t) { Write-Host "  · $t" -ForegroundColor DarkGray }
+function Bad($t)  { Write-Host "  x $t" -ForegroundColor Red }
+function Info($t) { Write-Host "    $t" -ForegroundColor DarkGray }
 
 function Load-State {
   if (-not (Test-Path $StateFile)) { return @() }
@@ -85,11 +85,11 @@ function Cloak-On($target) {
   if (-not (Test-Path $target -PathType Container)) { Bad "Not a folder: $target"; return }
   $od = $env:OneDrive
   if ($od -and -not $target.ToLower().StartsWith($od.ToLower())) {
-    Warn "Not under OneDrive ($od) — cloaking is harmless but pointless here."
+    Warn "Not under OneDrive ($od) - cloaking is harmless but pointless here."
   }
   $scratch = Scratch-For $target
   New-Item -ItemType Directory -Force -Path (Split-Path $scratch) | Out-Null
-  if (Test-Path $scratch) { Bad "Scratch already exists ($scratch) — a previous cloak may be dangling. Run restore-all."; return }
+  if (Test-Path $scratch) { Bad "Scratch already exists ($scratch) - a previous cloak may be dangling. Run restore-all."; return }
 
   # Record intent BEFORE mutating, so a crash mid-op is recoverable.
   $state = @(Load-State | Where-Object { $_.path -ne $target })
@@ -100,12 +100,12 @@ function Cloak-On($target) {
     Move-Item -LiteralPath $target -Destination $scratch -ErrorAction Stop
   } catch {
     Save-State $state  # roll back the record
-    Bad "Couldn't move $target — is a file open or a shell sitting in it? ($($_.Exception.Message))"
+    Bad "Couldn't move $target (is a file open or a shell sitting in it?): $($_.Exception.Message)"
     return
   }
   New-Item -ItemType Junction -Path $target -Target $scratch | Out-Null
   Ok "Cloaked: $target"
-  Info "bytes → $scratch  (OneDrive now ignores the junction)"
+  Info "bytes moved to $scratch (OneDrive now ignores the junction)"
 }
 
 function Cloak-Off($target) {
@@ -113,18 +113,18 @@ function Cloak-Off($target) {
   $state = @(Load-State)
   $entry = $state | Where-Object { $_.path -eq $target } | Select-Object -First 1
   if (-not $entry) {
-    if (Is-Junction $target) { Bad "$target is a junction but not tracked by cloak — refusing to guess. Remove it manually if intended." }
+    if (Is-Junction $target) { Bad "$target is a junction but not tracked by cloak. Refusing to guess; remove it manually if intended." }
     else { Warn "Not cloaked: $target" }
     return
   }
   if (Is-Junction $target) { [System.IO.Directory]::Delete($target, $false) }  # junction only
-  elseif (Test-Path $target) { Bad "$target exists but isn't a junction — not restoring over real data."; return }
+  elseif (Test-Path $target) { Bad "$target exists but isn't a junction. Not restoring over real data."; return }
 
   if (Test-Path $entry.scratch) {
     Move-Item -LiteralPath $entry.scratch -Destination $target -ErrorAction Stop
-    Ok "Uncloaked: $target  (OneDrive will re-sync)"
+    Ok "Uncloaked: $target (OneDrive will re-sync)"
   } else {
-    Bad "Scratch missing ($($entry.scratch)) — nothing to restore. State cleared."
+    Bad "Scratch missing ($($entry.scratch)). Nothing to restore; state cleared."
   }
   Save-State (@($state | Where-Object { $_.path -ne $target }))
 }
@@ -132,7 +132,7 @@ function Cloak-Off($target) {
 function Show-Status {
   $state = @(Load-State)
   Write-Host ""
-  Write-Host "  cloak — managed projects" -ForegroundColor Cyan
+  Write-Host "  cloak - managed projects" -ForegroundColor Cyan
   if (-not $state.Count) { Info "none cloaked."; Write-Host ""; return }
   foreach ($e in $state) {
     $live = if (Is-Junction $e.path) { 'CLOAKED' } else { 'stale?' }
