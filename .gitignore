@@ -1,0 +1,4 @@
+# cloak local state / scratch
+*.log
+/state/
+/.cloak-scratch/
