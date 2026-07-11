@@ -1,0 +1,25 @@
+{
+  // cloak daemon configuration
+  // Folders to watch for work activity. Any file change under these pauses
+  // OneDrive; when ALL have been quiet for idleSeconds, OneDrive resumes and
+  // syncs. Use your project roots, not your whole OneDrive.
+  "watchRoots": [
+    "C:\\Users\\yFake\\OneDrive\\Ambiente de Trabalho\\www\\Projects"
+  ],
+
+  // Ignore activity from these directory names (build churn shouldn't keep
+  // OneDrive paused forever after you stop — but note they still sync unless
+  // you also exclude them in OneDrive settings).
+  "ignoreDirs": [".git", "node_modules", "build", "target", "dist", "out", "__pycache__"],
+
+  // Resume OneDrive after this many seconds with no activity in any root.
+  "idleSeconds": 90,
+
+  // Safety: never stay paused longer than this many minutes in one stretch,
+  // even under continuous activity — resume briefly so backup is never
+  // indefinitely stale, then re-pause if work continues.
+  "maxPauseMinutes": 45,
+
+  // How long the daemon waits between checks.
+  "pollSeconds": 5
+}

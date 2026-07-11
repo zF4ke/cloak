@@ -2,50 +2,57 @@
 
 **Work on OneDrive-synced projects without OneDrive breaking your tools.**
 
-OneDrive's Files-On-Demand layer wrecks active development: source files get
-dehydrated to placeholders mid-build (`not a regular file`), long-running
+OneDrive's sync + Files-On-Demand layer wrecks active development: source files
+get dehydrated to placeholders mid-build (`not a regular file`), long-running
 processes read *stale cached content*, sync grabs *locks* on files you're
-compiling, and `build/` churn spawns conflict copies. Every one of these comes
-from OneDrive sitting between your tools and the real bytes.
+compiling, and `build/` churn spawns conflict copies.
 
-cloak gets it out of the way — **temporarily and automatically**. While you're
-working, your project is *cloaked*: OneDrive can't see it. When you stop, it's
-*uncloaked* back into place and syncs normally. You keep opening the exact same
-`OneDrive/…/Projects/foo` path you always have — nothing about your layout
-changes, and there's no second folder hanging around.
+cloak gets OneDrive out of the way **while you work, automatically** — and lets
+it sync everything back the moment you pause. No wrappers, no aliases, no
+per-project setup, no agent (Claude/Codex/whatever) ever has to know it exists.
 
 ## How it works
 
+`cloakd` (a tiny background daemon) watches your configurable project roots:
+
 ```
-idle      OneDrive/Projects/foo   ← a normal, synced folder. clean.
-             │  (you start working)
-working   OneDrive/Projects/foo ─(junction)→ C:\…\scratch\foo   ← real bytes, local, OneDrive skips it
-             │  (you stop)
-idle      OneDrive/Projects/foo   ← bytes moved back, scratch deleted, OneDrive syncs the result
+you write / build / run   →  OneDrive is gracefully paused (no locks, no stale reads, no churn)
+everything idle ~90s      →  OneDrive resumes and syncs the result   ✅ backup
 ```
 
-- The folder you open is always `Projects/foo`. During work it's a **junction**
-  to a local scratch dir, so tools hit local disk and OneDrive ignores the
-  reparse point entirely.
-- Same NTFS volume ⇒ isolate/restore is an **instant metadata move**, not a copy.
-- A background daemon decides *working* vs *idle* from file activity — so
-  **no agent, editor, or human ever has to think about it.** Works the same for
-  Claude, Codex, VS Code, or a bare terminal.
-- **Fails safe:** your bytes always live on local disk; a logon watchdog restores
-  any project left cloaked by a crash. You can't lose data or get stranded.
+- **Tool-agnostic:** it watches the *filesystem*, not your apps. GUI Claude
+  Code, Codex, VS Code, a terminal — all identical.
+- **One normal folder:** your projects stay plain synced OneDrive folders.
+  Nothing moves, no second copy, no junctions (in this mode).
+- **Never stale forever:** `maxPauseMinutes` forces a brief resume+sync even
+  under continuous activity, so backup can't rot during marathon sessions.
+- **Fails safe:** the daemon always restarts OneDrive on exit; if it crashes,
+  worst case is plain OneDrive behavior again — never data loss.
 
-## Status
+Pair it with turning **Files-On-Demand off** (or pinning your project roots)
+so files are always real bytes on disk — that kills the placeholder /
+dehydration bug class at the root; cloakd handles the lock/stale/churn class.
 
-🚧 Early. Current step: **`probe.ps1`** — measures how *your* OneDrive treats
-junctions before we build on the assumption (it varies by version / settings).
+## Files
+
+| file | what |
+|---|---|
+| `cloakd.ps1` | the daemon: watch roots → pause on activity → resume on idle |
+| `config.jsonc` | roots to watch, idle timing, ignore dirs — the one file you edit |
+| `cloak.ps1` | manual junction mode: `on`/`off`/`status`/`restore-all` — fully isolates a folder behind a junction to local disk (probe-verified: OneDrive ignores junctions) |
+| `probe.ps1` | measures how *your* OneDrive treats junctions before you trust them |
+
+## Quick start
 
 ```powershell
-pwsh -File probe.ps1
+# 1. edit config.jsonc → set watchRoots to your project folders
+# 2. run the daemon
+pwsh -File cloakd.ps1
 ```
 
-Roadmap: probe → daemon (activity detection + cloak/uncloak + fail-safe) →
-colored `install.ps1` (with a `migrate` for existing folders) → config.
+Installer with a logon Scheduled Task: coming next.
 
 ## Name
 
-It cloaks the folder from OneDrive's view. `cloak` / `uncloak`.
+It cloaks your work from OneDrive's attention while you're in the middle of it.
+`cloak` / `uncloak`. It rhymes, so it's good.
