@@ -7,8 +7,9 @@ placeholders mid-build (`not a regular file`), long-running processes read
 stale content, sync locks files while you compile. cloak fixes it the simple
 way: OneDrive shouldn't touch your project while you're working on it.
 
-A small daemon watches your project folders. Activity pauses OneDrive.
-Once everything is quiet for a bit, OneDrive resumes and syncs as normal.
+A small daemon watches your project folders. Activity stops OneDrive (silently,
+by ending its process so it releases your files). Once everything is quiet for a
+bit, OneDrive restarts and syncs as normal.
 
 ## Install
 

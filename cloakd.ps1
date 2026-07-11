@@ -43,14 +43,15 @@ if (-not $oneDriveExe) { Log "OneDrive.exe not found" Red; exit 2 }
 # ---------- OneDrive control ----------
 function OneDrive-Running { [bool](Get-Process OneDrive -ErrorAction SilentlyContinue) }
 
-$script:shutdownSentAt = [DateTime]::MinValue
 function Pause-OneDrive {
-  if (-not (OneDrive-Running)) { return }
-  # /shutdown takes ~14s to complete; don't spam it while one is in flight.
-  if (((Get-Date) - $script:shutdownSentAt).TotalSeconds -lt 30) { return }
-  $script:shutdownSentAt = Get-Date
-  Log "activity detected -> pausing OneDrive (graceful shutdown, ~15s)" Yellow
-  Start-Process $oneDriveExe -ArgumentList '/shutdown' -WindowStyle Hidden
+  # Terminate the process directly instead of `OneDrive.exe /shutdown`. /shutdown
+  # pops a "Could not shut down OneDrive" dialog whenever it can't exit cleanly;
+  # killing the process is silent, instant, and releases its file handles the
+  # same way. OneDrive resumes any in-flight upload on next launch.
+  $procs = @(Get-Process OneDrive -ErrorAction SilentlyContinue)
+  if (-not $procs.Count) { return }
+  Log "activity detected -> pausing OneDrive" Yellow
+  foreach ($p in $procs) { try { $p.Kill() } catch {} }
 }
 
 function Resume-OneDrive {
