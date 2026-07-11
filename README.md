@@ -51,6 +51,8 @@ warns you about this.
 | `idleSeconds` | `90` | quiet time before OneDrive resumes |
 | `maxPauseMinutes` | `45` | max time paused, even under constant activity |
 | `ignoreDirs` | `.git`, `node_modules`, ... | activity here doesn't count |
+| `pollSeconds` | `5` | how often the daemon checks |
+| `scratchDir` | `%LOCALAPPDATA%\cloak\scratch` | where junction mode stashes bytes |
 
 Logs: `%LOCALAPPDATA%\cloak\cloakd.log`
 
