@@ -21,13 +21,22 @@ pwsh -File install.ps1
 
 The installer asks for your projects folder, writes the config, registers the
 daemon to start at logon, and adds a `cloak` command to your PATH. Open a new
-terminal and:
+terminal to use it.
 
-```powershell
-cloak status       # daemon / OneDrive state + recent log
-cloak stop         # pause the daemon
-cloak log -Follow  # watch it live
-cloak uninstall    # clean removal
+## Commands
+
+```
+cloak status              daemon / task / OneDrive state + recent log
+cloak install             install or repair, add cloak to PATH
+cloak uninstall           remove the daemon and PATH entry
+cloak start | stop        start / stop the daemon
+cloak log [-Follow]       show the daemon log
+cloak probe               test how OneDrive treats junctions here
+
+cloak on <path>           manually hide a folder from OneDrive (junction mode)
+cloak off <path>          restore it
+cloak list                show junction-cloaked folders
+cloak restore-all         restore all of them
 ```
 
 ## How it behaves
@@ -58,16 +67,8 @@ Logs: `%LOCALAPPDATA%\cloak\cloakd.log`
 
 ## Junction mode
 
-For when you want a folder *fully* invisible to OneDrive (not just paused): it
-moves the folder to local disk and leaves a junction in its place, so nothing
-inside syncs until you turn it back off.
-
-```powershell
-cloak on <path>       # hide a folder
-cloak off <path>      # restore it (OneDrive re-syncs)
-cloak list            # what's hidden
-cloak restore-all     # restore everything
-```
-
-`cloak probe` tests how your OneDrive treats junctions before you rely on this,
-touching nothing but a throwaway folder.
+The `cloak on/off` commands are a separate, manual mode for when you want a
+folder *fully* invisible to OneDrive rather than just paused: it moves the
+folder to local disk and leaves a junction in its place, so nothing inside syncs
+until you `cloak off`. Run `cloak probe` first to confirm your OneDrive ignores
+junctions (it touches nothing but a throwaway folder).
