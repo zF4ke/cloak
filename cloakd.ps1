@@ -30,6 +30,7 @@ $jsonc = (Get-Content $ConfigPath -Raw) -replace '(?m)^\s*//.*$','' -replace '(?
 $cfg = $jsonc | ConvertFrom-Json
 $watchRoots  = @($cfg.watchRoots | Where-Object { Test-Path $_ })
 $ignoreDirs  = @($cfg.ignoreDirs)
+$ignoreFiles = @($cfg.ignoreFiles)
 $idleSeconds = [int]$cfg.idleSeconds
 $maxPause    = [TimeSpan]::FromMinutes([double]$cfg.maxPauseMinutes)
 $poll        = [int]$cfg.pollSeconds
@@ -78,10 +79,14 @@ foreach ($root in $watchRoots) {
   $action = {
     $data = $Event.MessageData
     $p = $Event.SourceEventArgs.FullPath
-    if ($data.rx -and $p -match $data.rx) { return }
+    if ($data.rx -and $p -match $data.rx) { return }         # ignored directory
+    if ($data.files) {
+      $leaf = [System.IO.Path]::GetFileName($p)
+      foreach ($g in $data.files) { if ($leaf -like $g) { return } }  # ignored filename
+    }
     $data.state.last = Get-Date
   }
-  $msg = @{ rx = $ignoreRegex; state = $shared }
+  $msg = @{ rx = $ignoreRegex; files = $ignoreFiles; state = $shared }
   foreach ($ev in 'Changed','Created','Deleted','Renamed') {
     $handlers += Register-ObjectEvent -InputObject $w -EventName $ev -Action $action -MessageData $msg
   }
