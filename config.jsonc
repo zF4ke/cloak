@@ -5,15 +5,13 @@
     "C:\\Users\\yFake\\OneDrive\\Ambiente de Trabalho\\www\\Projects"
   ],
 
-  // activity in these directory names is ignored (build output, VCS internals,
-  // and runtime dirs of apps you leave running inside a watched folder).
-  "ignoreDirs": [
-    ".git", "node_modules", "build", "target", "dist", "out", "__pycache__",
-    "logs", "server-runtime", "fake-appdata", ".gradle", ".next"
-  ],
+  // directory names whose activity should NOT pause OneDrive.
+  // empty by default; add your own, e.g. [".git", "node_modules", "build"]
+  "ignoreDirs": [],
 
-  // activity on files matching these globs is ignored (logs, temp, lock files)
-  "ignoreFiles": ["*.log", "*.tmp", "*.temp", "*.lock"],
+  // filename globs whose activity should NOT pause OneDrive.
+  // empty by default; add your own, e.g. ["*.log", "*.tmp"]
+  "ignoreFiles": [],
 
   // quiet time (seconds) before OneDrive resumes
   "idleSeconds": 90,

@@ -123,12 +123,13 @@ if (-not $Yes) {
     "$rootJson"
   ],
 
-  // activity in these directory names is ignored (build output, VCS internals,
-  // and runtime dirs of apps left running inside a watched folder)
-  "ignoreDirs": [".git", "node_modules", "build", "target", "dist", "out", "__pycache__", "logs", ".gradle", ".next"],
+  // directory names whose activity should NOT pause OneDrive (empty by default;
+  // add your own, e.g. [".git", "node_modules", "build"])
+  "ignoreDirs": [],
 
-  // activity on files matching these globs is ignored
-  "ignoreFiles": ["*.log", "*.tmp", "*.temp", "*.lock"],
+  // filename globs whose activity should NOT pause OneDrive (empty by default;
+  // add your own, e.g. ["*.log", "*.tmp"])
+  "ignoreFiles": [],
 
   // quiet time (seconds) before OneDrive resumes
   "idleSeconds": 90,
