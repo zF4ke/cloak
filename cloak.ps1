@@ -35,16 +35,22 @@ function Bad($t)  { Write-Host "  x $t" -ForegroundColor Red }
 function Info($t) { Write-Host "    $t" -ForegroundColor DarkGray }
 
 # ---------------- daemon control ----------------
+$Launcher = Join-Path ([Environment]::GetFolderPath('Startup')) 'cloak-daemon.vbs'
+function Daemon-Procs {
+  @(Get-CimInstance Win32_Process -Filter "Name='pwsh.exe' OR Name='powershell.exe' OR Name='wscript.exe'" |
+    Where-Object { $_.CommandLine -match 'cloakd\.ps1|cloak-daemon\.vbs' })
+}
 function Cmd-Start {
-  schtasks /Run /TN cloakd *> $null
-  if ($LASTEXITCODE -eq 0) { Ok "daemon started" } else { Bad "no scheduled task 'cloakd' - run: cloak install" }
+  if ((Daemon-Procs).Count) { Ok "daemon already running"; return }
+  if (-not (Test-Path $Launcher)) { Bad "autostart not installed - run: cloak install"; return }
+  Start-Process wscript.exe -ArgumentList "`"$Launcher`"" | Out-Null
+  Start-Sleep -Seconds 2
+  if ((Daemon-Procs).Count) { Ok "daemon started" } else { Bad "daemon did not start" }
 }
 function Cmd-Stop {
-  schtasks /End /TN cloakd *> $null
-  Get-CimInstance Win32_Process -Filter "Name='pwsh.exe' OR Name='powershell.exe'" |
-    Where-Object { $_.CommandLine -like '*cloakd.ps1*' } |
-    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-  Ok "daemon stopped"
+  $procs = Daemon-Procs
+  foreach ($p in $procs) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
+  Ok "daemon stopped ($($procs.Count) process(es))"
 }
 function Cmd-Log {
   if (-not (Test-Path $LogFile)) { Warn "no log yet ($LogFile)"; return }

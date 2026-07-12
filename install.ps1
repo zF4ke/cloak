@@ -43,8 +43,13 @@ function Read-Config {
   try { $jsonc | ConvertFrom-Json } catch { $null }
 }
 
-$BinDir = Join-Path $env:LOCALAPPDATA 'cloak\bin'
-$Shim   = Join-Path $BinDir 'cloak.cmd'
+$BinDir   = Join-Path $env:LOCALAPPDATA 'cloak\bin'
+$Shim     = Join-Path $BinDir 'cloak.cmd'
+# Autostart via the user's Startup folder: items there run at logon in the full
+# interactive session (like double-clicking), which is exactly what the daemon
+# needs. Task Scheduler's launch context killed the daemon instantly.
+$Startup  = [Environment]::GetFolderPath('Startup')
+$Launcher = Join-Path $Startup 'cloak-daemon.vbs'
 function Add-ToPath {
   New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
   # A tiny .cmd shim so `cloak <args>` works from any shell. Absolute paths so
@@ -59,6 +64,7 @@ function Add-ToPath {
 }
 function Remove-FromPath {
   if (Test-Path $Shim) { Remove-Item $Shim -Force }
+  if (Test-Path $Launcher) { Remove-Item $Launcher -Force }
   $userPath = [Environment]::GetEnvironmentVariable('Path','User')
   $kept = ($userPath -split ';' | Where-Object { $_ -and $_ -ne $BinDir }) -join ';'
   if ($kept -ne $userPath) { [Environment]::SetEnvironmentVariable('Path', $kept, 'User'); Ok "removed 'cloak' from PATH" }
@@ -69,8 +75,7 @@ Write-Host "cloak" -ForegroundColor Magenta
 
 if ($Status) {
   Head "status"
-  $task = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-  if ($task) { Ok "scheduled task registered (state: $($task.State))" } else { Warn "no scheduled task registered" }
+  if (Test-Path $Launcher) { Ok "autostart installed (Startup folder)" } else { Warn "autostart not installed" }
   $pids = Daemon-Pids
   if ($pids.Count) { Ok "daemon running (PID $($pids -join ', '))" } else { Warn "daemon not running" }
   if (Get-Process OneDrive -ErrorAction SilentlyContinue) { Ok "OneDrive running (not paused)" } else { Warn "OneDrive stopped (paused by cloak, or not started)" }
@@ -178,22 +183,32 @@ Head "install"
 foreach ($id in Daemon-Pids) { Stop-Process -Id $id -Force -ErrorAction SilentlyContinue; Info "stopped old daemon PID $id" }
 
 $pwshExe  = Get-Pwsh
-$action   = New-ScheduledTaskAction -Execute $pwshExe -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$Daemon`""
-$trigger  = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
-$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
-  -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero)
-if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
-  Set-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings | Out-Null
-  Ok "updated scheduled task (runs at logon)"
-} else {
-  Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Description 'cloak: pause OneDrive during active work in project folders' | Out-Null
-  Ok "registered scheduled task (runs at logon)"
-}
+New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 
-Start-ScheduledTask -TaskName $TaskName
-Start-Sleep -Seconds 3
+# Deploy the daemon + config to LOCAL disk. The repo may live under OneDrive,
+# and since the daemon PAUSES OneDrive, a repo copy could become an unreadable
+# placeholder exactly when the daemon needs to (re)launch. A local copy always
+# loads.
+$DeployDir    = Join-Path $env:LOCALAPPDATA 'cloak'
+$DeployDaemon = Join-Path $DeployDir 'cloakd.ps1'
+New-Item -ItemType Directory -Force -Path $DeployDir | Out-Null
+Copy-Item $Daemon $DeployDaemon -Force
+Copy-Item $Config (Join-Path $DeployDir 'config.jsonc') -Force
+Ok "deployed daemon to $DeployDir"
+
+# Hidden launcher .vbs in the Startup folder. wscript.exe has no console window,
+# and Run(cmd, 0, True) starts pwsh with a hidden window and stays alive for the
+# daemon's lifetime. No terminal ever appears.
+# Remove any old scheduled task from earlier versions.
+Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction SilentlyContinue
+$vbs = 'CreateObject("WScript.Shell").Run """' + $pwshExe + '"" -NoProfile -ExecutionPolicy Bypass -File ""' + $DeployDaemon + '""", 0, True'
+Set-Content -Path $Launcher -Value $vbs -Encoding ASCII
+Ok "autostart installed (Startup folder, runs hidden at logon)"
+
+Start-Process wscript.exe -ArgumentList "`"$Launcher`"" | Out-Null
+Start-Sleep -Seconds 4
 if ((Daemon-Pids).Count) { Ok "daemon running" }
-else { Bad "daemon did not start. run it manually to see why:  pwsh -File `"$Daemon`"" }
+else { Bad "daemon did not start. run it manually to see why:  pwsh -File `"$DeployDaemon`"" }
 
 Add-ToPath
 
