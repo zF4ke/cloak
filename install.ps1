@@ -50,17 +50,35 @@ $Shim     = Join-Path $BinDir 'cloak.cmd'
 # needs. Task Scheduler's launch context killed the daemon instantly.
 $Startup  = [Environment]::GetFolderPath('Startup')
 $Launcher = Join-Path $Startup 'cloak-daemon.vbs'
+function Broadcast-EnvChange {
+  # Tell already-running processes (esp. Explorer) that the environment changed,
+  # so terminals launched afterward pick up the new PATH without a logoff.
+  if (-not ('CloakNative' -as [type])) {
+    Add-Type -Namespace Cloak -Name Native -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll", SetLastError=true, CharSet=System.Runtime.InteropServices.CharSet.Auto)]
+public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint Msg, System.UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out System.UIntPtr lpdwResult);
+'@ -ErrorAction SilentlyContinue
+  }
+  try { $r=[UIntPtr]::Zero; [Cloak.Native]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, 'Environment', 2, 5000, [ref]$r) | Out-Null } catch {}
+}
 function Add-ToPath {
   New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
-  # A tiny .cmd shim so `cloak <args>` works from any shell. Absolute paths so
-  # it doesn't depend on pwsh being on PATH or the repo location.
-  "@echo off`r`n`"$(Get-Pwsh)`" -NoProfile -ExecutionPolicy Bypass -File `"$(Join-Path $Repo 'cloak.ps1')`" %*" |
+  # Shim runs the LOCAL deployed cloak.ps1 (not the OneDrive repo copy, which can
+  # be an unreadable placeholder while the daemon has OneDrive paused).
+  $cli = Join-Path (Join-Path $env:LOCALAPPDATA 'cloak') 'cloak.ps1'
+  "@echo off`r`n`"$(Get-Pwsh)`" -NoProfile -ExecutionPolicy Bypass -File `"$cli`" %*" |
     Set-Content -Path $Shim -Encoding ASCII
-  $userPath = [Environment]::GetEnvironmentVariable('Path','User')
+  # Read/write the User PATH via the registry as ExpandString so we never
+  # downgrade it to a plain string (which would break %VAR% entries).
+  $envKey = 'HKCU:\Environment'
+  $userPath = (Get-Item $envKey).GetValue('Path', '', 'DoNotExpandEnvironmentNames')
   if (($userPath -split ';') -notcontains $BinDir) {
-    [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + $BinDir), 'User')
-    Ok "added 'cloak' to PATH (open a new terminal to use it)"
-  } else { Ok "'cloak' command ready" }
+    Set-ItemProperty -Path $envKey -Name Path -Value ($userPath.TrimEnd(';') + ';' + $BinDir) -Type ExpandString
+  }
+  # Always broadcast: the entry may already be present but an earlier add may not
+  # have reached Explorer, leaving new terminals stale.
+  Broadcast-EnvChange
+  Ok "'cloak' on PATH (open a NEW terminal; if it still isn't found, fully close and reopen your terminal app)"
 }
 function Remove-FromPath {
   if (Test-Path $Shim) { Remove-Item $Shim -Force }
@@ -192,9 +210,11 @@ New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
 $DeployDir    = Join-Path $env:LOCALAPPDATA 'cloak'
 $DeployDaemon = Join-Path $DeployDir 'cloakd.ps1'
 New-Item -ItemType Directory -Force -Path $DeployDir | Out-Null
-Copy-Item $Daemon $DeployDaemon -Force
+foreach ($f in 'cloak.ps1','cloakd.ps1','install.ps1','probe.ps1') {
+  if (Test-Path (Join-Path $Repo $f)) { Copy-Item (Join-Path $Repo $f) (Join-Path $DeployDir $f) -Force }
+}
 Copy-Item $Config (Join-Path $DeployDir 'config.jsonc') -Force
-Ok "deployed daemon to $DeployDir"
+Ok "deployed to $DeployDir"
 
 # Hidden launcher .vbs in the Startup folder. wscript.exe has no console window,
 # and Run(cmd, 0, True) starts pwsh with a hidden window and stays alive for the
