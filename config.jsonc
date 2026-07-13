@@ -5,16 +5,21 @@
     "C:\\Users\\yFake\\OneDrive\\Ambiente de Trabalho\\www\\Projects"
   ],
 
-  // directory names whose activity should NOT pause OneDrive.
-  // empty by default; add your own, e.g. [".git", "node_modules", "build"]
+  // directory names whose activity should NOT pause OneDrive (empty by default;
+  // add your own, e.g. [".git", "node_modules", "build"])
   "ignoreDirs": [],
 
-  // filename globs whose activity should NOT pause OneDrive.
-  // empty by default; add your own, e.g. ["*.log", "*.tmp"]
+  // filename globs whose activity should NOT pause OneDrive (empty by default;
+  // add your own, e.g. ["*.log", "*.tmp"])
   "ignoreFiles": [],
 
   // quiet time (seconds) before OneDrive resumes
   "idleSeconds": 90,
+
+  // after resuming, ignore activity for this long: it's OneDrive itself
+  // syncing the backlog into the watched folder. without this, its own sync
+  // writes re-trigger the pause and sync never completes.
+  "resumeSettleSeconds": 180,
 
   // never stay paused longer than this, even under constant activity
   "maxPauseMinutes": 45,

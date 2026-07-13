@@ -34,6 +34,13 @@ $ignoreFiles = @($cfg.ignoreFiles)
 $idleSeconds = [int]$cfg.idleSeconds
 $maxPause    = [TimeSpan]::FromMinutes([double]$cfg.maxPauseMinutes)
 $poll        = [int]$cfg.pollSeconds
+# Settle window after a resume: OneDrive's own catch-up sync writes into the
+# watched folders (it IS the sync client), and without this those writes
+# re-trigger the watcher ~a minute after every resume - an infinite
+# pause/resume loop where sync never finishes. Activity during the settle
+# window is attributed to OneDrive; activity that CONTINUES past it is real
+# work and pauses as normal.
+$settleSeconds = if ($null -ne $cfg.resumeSettleSeconds) { [int]$cfg.resumeSettleSeconds } else { 180 }
 if (-not $watchRoots.Count) { Log "no existing watchRoots in config" Red; exit 2 }
 
 $oneDriveExe = @("$env:LOCALAPPDATA\Microsoft\OneDrive\OneDrive.exe",
@@ -44,14 +51,16 @@ if (-not $oneDriveExe) { Log "OneDrive.exe not found" Red; exit 2 }
 # ---------- OneDrive control ----------
 function OneDrive-Running { [bool](Get-Process OneDrive -ErrorAction SilentlyContinue) }
 
-function Pause-OneDrive {
+function Pause-OneDrive($trigger) {
   # Terminate the process directly instead of `OneDrive.exe /shutdown`. /shutdown
   # pops a "Could not shut down OneDrive" dialog whenever it can't exit cleanly;
   # killing the process is silent, instant, and releases its file handles the
   # same way. OneDrive resumes any in-flight upload on next launch.
   $procs = @(Get-Process OneDrive -ErrorAction SilentlyContinue)
   if (-not $procs.Count) { return }
-  Log "activity detected -> pausing OneDrive" Yellow
+  # Always name the file that tripped the watcher, so "what was writing?" is
+  # never a guess.
+  Log "activity ($trigger) -> pausing OneDrive" Yellow
   foreach ($p in $procs) { try { $p.Kill() } catch {} }
 }
 
@@ -65,7 +74,7 @@ function Resume-OneDrive {
 # Shared state: event actions run in their own dynamic module, so a plain
 # $script: variable is NOT visible from them - use a synchronized hashtable
 # handed in via MessageData.
-$shared = [hashtable]::Synchronized(@{ last = [DateTime]::MinValue })
+$shared = [hashtable]::Synchronized(@{ last = [DateTime]::MinValue; lastPath = '' })
 $ignoreRegex = if ($ignoreDirs.Count) {
   '\\(' + (($ignoreDirs | ForEach-Object { [regex]::Escape($_) }) -join '|') + ')\\'
 } else { $null }
@@ -85,6 +94,7 @@ foreach ($root in $watchRoots) {
       foreach ($g in $data.files) { if ($leaf -like $g) { return } }  # ignored filename
     }
     $data.state.last = Get-Date
+    $data.state.lastPath = $p
   }
   $msg = @{ rx = $ignoreRegex; files = $ignoreFiles; state = $shared }
   foreach ($ev in 'Changed','Created','Deleted','Renamed') {
@@ -98,7 +108,8 @@ foreach ($root in $watchRoots) {
 Log ("cloakd up - idle={0}s - maxPause={1}m - OneDrive: {2}" -f $idleSeconds, $maxPause.TotalMinutes, $(if (OneDrive-Running) {'running'} else {'stopped'})) Magenta
 
 # ---------- main loop ----------
-$pausedAt = $null            # when we shut OneDrive down (null = not paused by us)
+$pausedAt  = $null           # when we shut OneDrive down (null = not paused by us)
+$resumedAt = Get-Date        # when OneDrive last (re)started; settle window counts from here
 try {
   while ($true) {
     Start-Sleep -Seconds $poll
@@ -108,9 +119,14 @@ try {
       $running = OneDrive-Running
 
       if ($running) {
-        # OneDrive is up. Pause on fresh activity.
-        if ($shared.last -ne [DateTime]::MinValue -and $idleFor.TotalSeconds -lt $idleSeconds) {
-          Pause-OneDrive
+        # OneDrive is up. Pause on fresh activity - but not during the settle
+        # window right after a resume: that activity is OneDrive itself syncing
+        # the backlog into the watched folder, and pausing on it creates an
+        # endless pause/resume loop where sync never completes. If activity is
+        # still fresh once the window has passed, it's real work.
+        $settled = ($now - $resumedAt).TotalSeconds -ge $settleSeconds
+        if ($settled -and $shared.last -ne [DateTime]::MinValue -and $idleFor.TotalSeconds -lt $idleSeconds) {
+          Pause-OneDrive $shared.lastPath
           $pausedAt = $now
         }
       } else {
@@ -121,11 +137,8 @@ try {
         if ($quiet -or $pausedLong) {
           if ($pausedLong -and -not $quiet) { Log "maxPause reached under continuous activity -> brief resume so backup can't go stale" Yellow }
           Resume-OneDrive
-          $pausedAt = $null
-          if ($pausedLong -and -not $quiet) {
-            # give it a window to actually sync before activity re-pauses it
-            Start-Sleep -Seconds 60
-          }
+          $pausedAt  = $null
+          $resumedAt = Get-Date
         }
       }
     } catch {

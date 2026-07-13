@@ -58,6 +58,7 @@ warns you about this.
 |---|---|---|
 | `watchRoots` | set by installer | folders to watch |
 | `idleSeconds` | `90` | quiet time before OneDrive resumes |
+| `resumeSettleSeconds` | `180` | after a resume, activity is ignored for this long (it's OneDrive's own sync) |
 | `maxPauseMinutes` | `45` | max time paused, even under constant activity |
 | `ignoreDirs` | `[]` | directory names whose activity won't pause OneDrive |
 | `ignoreFiles` | `[]` | filename globs whose activity won't pause OneDrive (e.g. `*.log`) |
