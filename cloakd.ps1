@@ -146,10 +146,20 @@ try {
           $delta = if ($ioNow -ge $ioPrev) { $ioNow - $ioPrev } else { [uint64]::MaxValue }
           $ioPrev = $ioNow
           if ($delta -lt $IO_QUIET_BYTES) { $ioQuiet++ } else { $ioQuiet = 0 }
+          # Long backlogs can take minutes; say so instead of looking hung.
+          $settlingFor = $now - $settleFrom
+          if ([int]$settlingFor.TotalSeconds % 60 -lt $poll -and $settlingFor.TotalSeconds -ge 60) {
+            Log ("settling: OneDrive still syncing ({0:N0}s, last delta {1:N1} MB)" -f $settlingFor.TotalSeconds, ($delta/1MB)) DarkGray
+          }
           if ($ioQuiet -ge $IO_QUIET_POLLS) {
             $settling = $false
+            # Everything that happened before this moment has been synced (that's
+            # what I/O-quiet means) - consume it so we don't pause on stale
+            # activity. Real ongoing work produces a fresh event within seconds.
+            $shared.last = [DateTime]::MinValue
+            $shared.lastPath = ''
             Log "OneDrive I/O quiet -> sync caught up, watcher armed" Green
-          } elseif (($now - $settleFrom) -ge $settleMax) {
+          } elseif ($settlingFor -ge $settleMax) {
             $settling = $false
             Log "settle cap reached ($($settleMax.TotalMinutes)m) -> arming watcher anyway" Yellow
           }
