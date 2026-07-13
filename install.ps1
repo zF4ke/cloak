@@ -157,9 +157,9 @@ if (-not $Yes) {
   // quiet time (seconds) before OneDrive resumes
   "idleSeconds": 90,
 
-  // after resuming, ignore activity for this long: it's OneDrive itself
-  // syncing the backlog into the watched folder
-  "resumeSettleSeconds": 180,
+  // after resuming, the pause-watcher re-arms only once OneDrive's I/O goes
+  // quiet (sync done); this is the safety cap on that wait
+  "settleMaxMinutes": 30,
 
   // never stay paused longer than this, even under constant activity
   "maxPauseMinutes": 45,

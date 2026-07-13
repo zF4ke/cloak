@@ -34,13 +34,13 @@ $ignoreFiles = @($cfg.ignoreFiles)
 $idleSeconds = [int]$cfg.idleSeconds
 $maxPause    = [TimeSpan]::FromMinutes([double]$cfg.maxPauseMinutes)
 $poll        = [int]$cfg.pollSeconds
-# Settle window after a resume: OneDrive's own catch-up sync writes into the
-# watched folders (it IS the sync client), and without this those writes
-# re-trigger the watcher ~a minute after every resume - an infinite
-# pause/resume loop where sync never finishes. Activity during the settle
-# window is attributed to OneDrive; activity that CONTINUES past it is real
-# work and pauses as normal.
-$settleSeconds = if ($null -ne $cfg.resumeSettleSeconds) { [int]$cfg.resumeSettleSeconds } else { 180 }
+# Settling after a resume: OneDrive's own catch-up sync touches the watched
+# folders (it IS the sync client), and pausing on that activity creates an
+# infinite pause/resume loop where sync never finishes. A fixed timer can't
+# work - sync duration depends on the backlog - so instead we watch the
+# OneDrive process's actual I/O counters and only arm the pause-watcher once
+# they go quiet (sync genuinely done). settleMaxMinutes is a safety cap.
+$settleMax = [TimeSpan]::FromMinutes($(if ($null -ne $cfg.settleMaxMinutes) { [double]$cfg.settleMaxMinutes } else { 30 }))
 if (-not $watchRoots.Count) { Log "no existing watchRoots in config" Red; exit 2 }
 
 $oneDriveExe = @("$env:LOCALAPPDATA\Microsoft\OneDrive\OneDrive.exe",
@@ -68,6 +68,17 @@ function Resume-OneDrive {
   if (OneDrive-Running) { return }
   Log "idle -> resuming OneDrive (sync will catch up)" Green
   Start-Process $oneDriveExe -ArgumentList '/background'
+}
+
+# Total bytes OneDrive has read+written since start (WMI transfer counters,
+# summed across its processes). The delta between polls tells us whether it is
+# actively syncing or sitting idle.
+function OneDrive-IoBytes {
+  $total = [uint64]0
+  foreach ($p in @(Get-CimInstance Win32_Process -Filter "Name='OneDrive.exe'" -ErrorAction SilentlyContinue)) {
+    $total += [uint64]$p.ReadTransferCount + [uint64]$p.WriteTransferCount
+  }
+  $total
 }
 
 # ---------- activity watchers ----------
@@ -108,8 +119,18 @@ foreach ($root in $watchRoots) {
 Log ("cloakd up - idle={0}s - maxPause={1}m - OneDrive: {2}" -f $idleSeconds, $maxPause.TotalMinutes, $(if (OneDrive-Running) {'running'} else {'stopped'})) Magenta
 
 # ---------- main loop ----------
-$pausedAt  = $null           # when we shut OneDrive down (null = not paused by us)
-$resumedAt = Get-Date        # when OneDrive last (re)started; settle window counts from here
+# While OneDrive runs the daemon is in one of two modes:
+#   settling - OneDrive is (or may be) syncing its backlog; its own writes into
+#              the watched folder must not count as activity. We watch its I/O
+#              counters and only arm the watcher once they go quiet.
+#   armed    - sync is done; fresh folder activity means real work -> pause.
+$IO_QUIET_BYTES  = 512KB     # per-poll I/O delta below this counts as "quiet"
+$IO_QUIET_POLLS  = 3         # consecutive quiet polls required to arm
+$pausedAt   = $null          # when we shut OneDrive down (null = not paused by us)
+$settling   = $true          # start settling: OneDrive may have a backlog right now
+$settleFrom = Get-Date
+$ioPrev     = OneDrive-IoBytes
+$ioQuiet    = 0
 try {
   while ($true) {
     Start-Sleep -Seconds $poll
@@ -119,13 +140,20 @@ try {
       $running = OneDrive-Running
 
       if ($running) {
-        # OneDrive is up. Pause on fresh activity - but not during the settle
-        # window right after a resume: that activity is OneDrive itself syncing
-        # the backlog into the watched folder, and pausing on it creates an
-        # endless pause/resume loop where sync never completes. If activity is
-        # still fresh once the window has passed, it's real work.
-        $settled = ($now - $resumedAt).TotalSeconds -ge $settleSeconds
-        if ($settled -and $shared.last -ne [DateTime]::MinValue -and $idleFor.TotalSeconds -lt $idleSeconds) {
+        if ($settling) {
+          $ioNow = OneDrive-IoBytes
+          # Counter reset (OneDrive restarted) reads as negative - treat as busy.
+          $delta = if ($ioNow -ge $ioPrev) { $ioNow - $ioPrev } else { [uint64]::MaxValue }
+          $ioPrev = $ioNow
+          if ($delta -lt $IO_QUIET_BYTES) { $ioQuiet++ } else { $ioQuiet = 0 }
+          if ($ioQuiet -ge $IO_QUIET_POLLS) {
+            $settling = $false
+            Log "OneDrive I/O quiet -> sync caught up, watcher armed" Green
+          } elseif (($now - $settleFrom) -ge $settleMax) {
+            $settling = $false
+            Log "settle cap reached ($($settleMax.TotalMinutes)m) -> arming watcher anyway" Yellow
+          }
+        } elseif ($shared.last -ne [DateTime]::MinValue -and $idleFor.TotalSeconds -lt $idleSeconds) {
           Pause-OneDrive $shared.lastPath
           $pausedAt = $now
         }
@@ -137,8 +165,11 @@ try {
         if ($quiet -or $pausedLong) {
           if ($pausedLong -and -not $quiet) { Log "maxPause reached under continuous activity -> brief resume so backup can't go stale" Yellow }
           Resume-OneDrive
-          $pausedAt  = $null
-          $resumedAt = Get-Date
+          $pausedAt   = $null
+          $settling   = $true
+          $settleFrom = Get-Date
+          $ioPrev     = OneDrive-IoBytes
+          $ioQuiet    = 0
         }
       }
     } catch {

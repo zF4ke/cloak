@@ -16,10 +16,10 @@
   // quiet time (seconds) before OneDrive resumes
   "idleSeconds": 90,
 
-  // after resuming, ignore activity for this long: it's OneDrive itself
-  // syncing the backlog into the watched folder. without this, its own sync
-  // writes re-trigger the pause and sync never completes.
-  "resumeSettleSeconds": 180,
+  // after resuming, the daemon watches OneDrive's I/O and only re-arms the
+  // pause-watcher once sync is actually done (I/O quiet) - a fixed timer can't
+  // know how long the backlog takes. this is just the safety cap.
+  "settleMaxMinutes": 30,
 
   // never stay paused longer than this, even under constant activity
   "maxPauseMinutes": 45,
