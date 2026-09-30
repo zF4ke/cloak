@@ -16,6 +16,12 @@ Choose the repository root, not a child folder. Cloak inspects Git and shows the
 
 The entire folder moves, including `.git` and ignored local files. Close editors, terminals and servers using it first. Source and destination must be on the same drive. Cloak never replaces an existing destination. Linked Git worktrees cannot be moved this way. Download OneDrive placeholders before importing.
 
+| Current location                                                  | What Add existing does                                                                                         |
+| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Inside your OneDrive Projects folder                              | Moves the folder to the real project root and creates the optional link.                                       |
+| Already at the configured real root under the chosen project name | Keeps the folder in place, registers it and creates the optional link.                                         |
+| Anywhere else                                                     | Moves the folder to the configured real root and creates the optional link. The same-drive rule still applies. |
+
 If repository or link setup fails after a move, Cloak keeps and registers the local folder with a warning. Open details to Connect repository or Restore folder link. If Git initialization failed, repair Git in the retained folder first. Do not delete the folder to clear an error.
 
 ## Clone repository

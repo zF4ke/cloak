@@ -5,6 +5,7 @@ await build({
     "tests/projects.test.ts",
     "tests/install.test.ts",
     "tests/lock.test.ts",
+    "tests/package.test.ts",
   ],
   outdir: "dist/tests",
   outExtension: { ".js": ".cjs" },
@@ -21,6 +22,7 @@ const result = spawnSync(
     "dist/tests/projects.test.cjs",
     "dist/tests/install.test.cjs",
     "dist/tests/lock.test.cjs",
+    "dist/tests/package.test.cjs",
   ],
   { stdio: "inherit", windowsHide: true },
 );

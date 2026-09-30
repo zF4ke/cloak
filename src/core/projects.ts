@@ -536,12 +536,18 @@ export class Projects {
         )
           .split("\0")
           .filter(Boolean)
-          .map((path) => path.replace(/\/$/, ""));
+          .map((path) => path.replace(/\/$/, ""))
+          .map((path) =>
+            process.platform === "win32" ? path.toLowerCase() : path,
+          );
         const incoming = (
           await git("ls-tree", "-r", "--name-only", "-z", remote)
         )
           .split("\0")
-          .filter(Boolean);
+          .filter(Boolean)
+          .map((path) =>
+            process.platform === "win32" ? path.toLowerCase() : path,
+          );
         if (
           ignored.some((local) =>
             incoming.some(

@@ -20,18 +20,19 @@ flowchart LR
   D --> OD[OneDrive process]
 ```
 
-| Module                   | Owns                                                                                             |
-| ------------------------ | ------------------------------------------------------------------------------------------------ |
-| `src/ui`                 | Project/setup/settings views, controls and motion. Reads snapshots and invokes explicit actions. |
-| `src/app`                | Window, tray, sign-in launch, picker and IPC boundary.                                           |
-| `src/core/service.ts`    | Scheduler and command dispatch shared by desktop/CLI.                                            |
-| `src/core/projects.ts`   | Registry, imports, links and Git mutation policy.                                                |
-| `src/core/git.ts`        | Parsed branch, changes, remote and commit counts.                                                |
-| `src/core/lock.ts`       | Mutation coordination across app and CLI.                                                        |
-| `src/core/storage.ts`    | JSON registry writes through temporary file and rename.                                          |
-| `src/core/protection.ts` | JSONC configuration and PowerShell bridge.                                                       |
-| `src/setup`              | App-styled installer and staged file replacement.                                                |
-| PowerShell scripts       | Original watcher and temporary junction records.                                                 |
+| Module                             | Owns                                                                                             |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `src/ui`                           | Project/setup/settings views, controls and motion. Reads snapshots and invokes explicit actions. |
+| `src/app`                          | Window, tray, sign-in launch, picker and IPC boundary.                                           |
+| `src/core/service.ts`              | Scheduler and command dispatch shared by desktop/CLI.                                            |
+| `src/core/projects.ts`             | Registry, imports, links and Git mutation policy.                                                |
+| `src/core/git.ts`                  | Parsed branch, changes, remote and commit counts.                                                |
+| `src/core/lock.ts`                 | Mutation coordination across app and CLI.                                                        |
+| `src/core/storage.ts`              | JSON registry writes through temporary file and rename.                                          |
+| `src/core/protection.ts`           | JSONC configuration and PowerShell bridge.                                                       |
+| `src/core/desktop-installation.ts` | Running-app detection and transactional Windows registration.                                    |
+| `src/setup`                        | App-styled installer and staged file replacement.                                                |
+| PowerShell scripts                 | Original watcher and temporary junction records.                                                 |
 
 ## Operation flow
 

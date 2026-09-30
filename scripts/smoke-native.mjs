@@ -8,8 +8,11 @@ import assert from "node:assert/strict";
 // Test the packaged Electron app, its sandboxed preload and real installer.
 // This is native-app integration, not browser-preview automation.
 const directory = await mkdtemp(join(tmpdir(), "cloak-native-"));
+const installLocal = process.argv.includes("--install-local");
 const profile = join(directory, "profile"),
-  installation = join(directory, "installation");
+  installation = installLocal
+    ? join(process.env.LOCALAPPDATA, "cloak")
+    : join(directory, "installation");
 const port = 43921;
 const processes = [];
 async function connect(executable, args = [], setup = false) {
@@ -20,6 +23,7 @@ async function connect(executable, args = [], setup = false) {
     CLOAK_SETUP_DEBUG_PORT: String(port),
   };
   delete environment.ELECTRON_RUN_AS_NODE;
+  if (installLocal && setup) delete environment.CLOAK_SETUP_DATA_DIR;
   const child = spawn(
     executable,
     [
@@ -142,7 +146,59 @@ try {
   await native.evaluate(
     `window.cloak.saveSettings(${JSON.stringify(settings)})`,
   );
+  for (const name of ["Reader", "Arcade"]) {
+    const source = join(directory, "incoming", name);
+    const remote = join(directory, `${name}.git`);
+    await mkdir(source, { recursive: true });
+    const git = (args) =>
+      execFileSync("git", args, {
+        cwd: source,
+        windowsHide: true,
+        stdio: "pipe",
+      });
+    git(["init", "--bare", remote]);
+    git(["init", "-b", "main"]);
+    git(["config", "user.name", "Cloak test"]);
+    git(["config", "user.email", "test@example.invalid"]);
+    await writeFile(join(source, "README.md"), `# ${name}\n`);
+    git(["add", "README.md"]);
+    git(["commit", "-m", "Initial fixture"]);
+    git(["remote", "add", "origin", remote]);
+    await native.evaluate(
+      `window.cloak.create(${JSON.stringify({ mode: "import", name, source, repository: remote, visibility: "private", createRepository: false, useRemote: true })})`,
+    );
+  }
+  await native.call("Page.reload", {});
+  await pause(1500);
   await screenshot(native, "projects");
+  await native.evaluate(
+    "document.querySelector('.action-tile.purple').click()",
+  );
+  await pause(400);
+  assert.equal(
+    await native.evaluate(
+      "getComputedStyle(document.querySelector('.step-track > div')).transform",
+    ),
+    "matrix(0, 0, 0, 1, 0, 0)",
+  );
+  await native.call("Input.insertText", { text: "Journal" });
+  await native.evaluate(
+    "document.querySelector('dialog .button.primary').click()",
+  );
+  await pause(400);
+  await screenshot(native, "onboarding");
+  await native.evaluate(
+    "document.querySelector('dialog .button.primary').click()",
+  );
+  await pause(400);
+  assert.match(
+    await native.evaluate("document.querySelector('dialog').innerText"),
+    /Journal/,
+  );
+  await native.evaluate(
+    "document.querySelector('dialog button[aria-label=Close]').click()",
+  );
+  await pause(400);
   await native.evaluate(
     "document.querySelector('nav button[aria-label=Settings]').click()",
   );
@@ -205,6 +261,13 @@ try {
   );
   const info = await native.evaluate("window.setup.info()");
   assert.equal(info.path, join(installation, "app"));
+  const centering = await native.evaluate(
+    "(() => {const area=document.querySelector('.setup-main').getBoundingClientRect(),first=document.querySelector('.setup-mark').getBoundingClientRect(),last=document.querySelector('.setup-location').getBoundingClientRect();return {above:first.top-area.top,below:area.bottom-last.bottom}})()",
+  );
+  assert.ok(
+    Math.abs(centering.above - centering.below) < 2,
+    JSON.stringify(centering),
+  );
   await screenshot(native, "setup-welcome");
   await native.evaluate(
     "document.querySelector('.setup-action button').click()",
@@ -254,7 +317,46 @@ try {
       },
     },
   );
-  assert.match(output, /No managed projects/);
+  assert.match(output, /Reader/);
+  assert.match(output, /Arcade/);
+  if (installLocal) {
+    const registration = JSON.parse(
+      execFileSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Cloak' | Select-Object DisplayVersion,InstallLocation | ConvertTo-Json -Compress",
+        ],
+        { encoding: "utf8", windowsHide: true },
+      ),
+    );
+    assert.equal(registration.DisplayVersion, version);
+    assert.equal(registration.InstallLocation, join(installation, "app"));
+    const integration = JSON.parse(
+      execFileSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "$taskStart = Join-Path ([Environment]::GetFolderPath('Programs')) 'Cloak\\Cloak.lnk'; $taskShell = New-Object -ComObject WScript.Shell; @{Target=$taskShell.CreateShortcut($taskStart).TargetPath; Path=[Environment]::GetEnvironmentVariable('Path','User')} | ConvertTo-Json -Compress",
+        ],
+        { encoding: "utf8", windowsHide: true },
+      ),
+    );
+    assert.equal(integration.Target, join(installation, "app", "Cloak.exe"));
+    assert.ok(
+      integration.Path.split(";").some(
+        (path) =>
+          path.toLowerCase() === join(installation, "app").toLowerCase(),
+      ),
+    );
+    console.log(
+      "Per-user Windows install, uninstall registration, Start menu shortcut and CLI PATH verified.",
+    );
+  }
   console.log(
     "Native IPC, sandbox, dropdowns, accessibility, NSIS extraction, installation and packaged CLI passed.",
   );

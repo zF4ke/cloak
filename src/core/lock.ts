@@ -89,7 +89,25 @@ export async function withProjectLock<T>(
     try {
       return await operation();
     } finally {
-      await rm(lock, { recursive: true });
+      // Release the public name before deleting private files. A crash during
+      // cleanup cannot leave an empty public lock directory.
+      const releaseDeadline = Date.now() + 10_000;
+      while (true) {
+        try {
+          await rename(lock, pending);
+          break;
+        } catch (error) {
+          if (
+            !["EPERM", "EACCES", "EBUSY"].includes(
+              (error as NodeJS.ErrnoException).code ?? "",
+            ) ||
+            Date.now() > releaseDeadline
+          )
+            throw error;
+          // Another Windows reader can briefly hold owner.json open.
+          await setTimeout(20);
+        }
+      }
     }
   } finally {
     await rm(pending, { recursive: true, force: true });

@@ -35,7 +35,10 @@
   align-items: center;
   text-align: center;
   position: relative;
-  padding: 36px 36px 24px;
+  height: calc(100% - 42px);
+  justify-content: safe center;
+  padding: 24px 36px;
+  overflow-y: auto;
 }
 .setup-mark {
   width: 68px;

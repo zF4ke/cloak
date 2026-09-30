@@ -14,8 +14,7 @@
     "test": "node scripts/test.mjs",
     "smoke:native": "node scripts/smoke-native.mjs",
     "package": "npm run build && node scripts/package.mjs",
-    "installer": "npm run package && node scripts/build-installer.mjs",
-    "skill:install": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/install-design-skill.ps1"
+    "installer": "npm run package && node scripts/build-installer.mjs"
   },
   "dependencies": {
     "@radix-ui/react-select": "^2.3.7",

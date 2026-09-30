@@ -5,11 +5,27 @@ import {
   writeFile,
   copyFile,
   readFile,
+  rm,
+  realpath,
+  lstat,
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { rcedit } from "rcedit";
 const version = JSON.parse(await readFile("package.json", "utf8")).version;
 const target = "release/Cloak";
+const repository = await realpath(".");
+await mkdir("release", { recursive: true });
+const releaseParent = await realpath("release");
+if (releaseParent !== join(repository, "release"))
+  throw new Error("Refusing a redirected release folder.");
+const absoluteTarget = join(releaseParent, "Cloak");
+const outputStat = await lstat(absoluteTarget).catch((error) => {
+  if (error.code === "ENOENT") return undefined;
+  throw error;
+});
+if (outputStat?.isSymbolicLink())
+  throw new Error("Refusing a linked package output folder.");
+await rm(absoluteTarget, { recursive: true, force: true });
 await mkdir(target, { recursive: true });
 await cp("node_modules/electron/dist", target, { recursive: true });
 await rename(join(target, "electron.exe"), join(target, "Cloak.exe"));

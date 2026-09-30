@@ -3,7 +3,7 @@
 <p align="center">Keep Git projects outside OneDrive, with folder links where you work.</p>
 <p align="center"><a href="https://github.com/zF4ke/cloak/releases/latest">Download for Windows</a> / <a href="docs/projects.md">Project guide</a> / <a href="docs/cli.md">CLI</a> / <a href="docs/development.md">Development</a></p>
 
-![Cloak project manager](docs/images/projects.png)
+<p align="center"><img src="docs/images/projects-rounded.svg" width="760" alt="Cloak project manager" /></p>
 
 OneDrive can duplicate source files and corrupt Git metadata while syncing an active repository. Cloak stores the real folder outside OneDrive, uses GitHub for commits, and leaves an optional directory junction in your familiar Projects folder. Editors and terminals can open it normally. The original pause/resume tool remains available for ordinary OneDrive projects.
 
@@ -52,5 +52,6 @@ Microsoft does not support syncing symlinks or junctions with OneDrive. Cloak us
 | [Architecture](docs/architecture.md) | Components, stored data and operation flow.            |
 | [Development](docs/development.md)   | Run, verify, package and release.                      |
 | [Design](docs/design.md)             | Tokens, controls, motion and references.               |
+| [Verification](docs/verification.md) | Code reviews, completed checks and remaining limits.   |
 
 Windows x64 is the release target. Binaries are unsigned. Project checks do not install new application releases; run a new Cloak installer manually.

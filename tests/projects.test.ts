@@ -9,6 +9,7 @@ import {
   lstat,
   rm,
   symlink,
+  rename,
 } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -116,6 +117,35 @@ test("ignored local files survive changed ignore rules and block incoming tracke
     await f.close();
   }
 });
+test(
+  "Windows ignored paths block incoming case-variant names",
+  { skip: process.platform !== "win32" },
+  async () => {
+    const f = await fixture();
+    try {
+      const { project } = await f.add();
+      await writeFile(join(project.path, ".env"), "local secret");
+      await writeFile(join(f.seed, ".ENV"), "remote");
+      await f.git(f.seed, "add", "-f", ".ENV");
+      await f.git(f.seed, "commit", "-m", "case variant");
+      await f.git(f.seed, "push");
+      const head = await f.git(project.path, "rev-parse", "HEAD");
+      await f.projects.checkUpdates();
+      assert.equal(await f.git(project.path, "rev-parse", "HEAD"), head);
+      assert.equal(
+        await readFile(join(project.path, ".env"), "utf8"),
+        "local secret",
+      );
+      assert.match(
+        (await f.projects.views())[0]?.update?.message ?? "",
+        /ignored local files/,
+      );
+    } finally {
+      await f.close();
+    }
+  },
+);
+
 test("selected names with Git wildcard characters are treated literally", async () => {
   const f = await fixture();
   try {
@@ -157,6 +187,77 @@ test("import moves the whole folder outside OneDrive and creates a transparent f
     await f.close();
   }
 });
+test("import registers a project already at the real destination without moving it", async () => {
+  const f = await fixture();
+  try {
+    const target = join(f.local, "project");
+    await rename(f.source, target);
+    await writeFile(join(target, ".env"), "retained local data");
+    const { project } = await f.projects.create({
+      mode: "import",
+      name: "project",
+      source: target,
+      useRemote: true,
+      createRepository: false,
+      visibility: "private",
+    });
+    assert.equal(project.path, target);
+    assert.equal(
+      await readFile(join(target, ".env"), "utf8"),
+      "retained local data",
+    );
+    assert.equal(await realpath(project.link!), await realpath(target));
+  } finally {
+    await f.close();
+  }
+});
+
+test("a failed initial link remains visible and can be repaired without moving the retained project", async () => {
+  const f = await fixture();
+  try {
+    let obstructed = false;
+    const execute: Run = async (command, args, options) => {
+      if (
+        !obstructed &&
+        command === "git" &&
+        args[0] === "-C" &&
+        args[1] === join(f.local, "project")
+      ) {
+        await mkdir(f.source);
+        obstructed = true;
+      }
+      return run(command, args, options);
+    };
+    const projects = new Projects(
+      join(f.root, "state"),
+      f.settings,
+      [f.cloud],
+      execute,
+    );
+    const result = await projects.create({
+      mode: "import",
+      name: "project",
+      source: f.source,
+      useRemote: true,
+      createRepository: false,
+      visibility: "private",
+    });
+    assert.match(result.warning ?? "", /Folder link failed/);
+    assert.equal((await projects.views())[0]?.linkMissing, true);
+    assert.equal(result.project.link, f.source);
+    await rm(f.source, { recursive: true });
+    await projects.repairLink(result.project.id);
+    assert.equal((await projects.views())[0]?.linkMissing, false);
+    assert.equal(await realpath(f.source), await realpath(result.project.path));
+    assert.equal(
+      (await readFile(join(result.project.path, "README.md"), "utf8")).trim(),
+      "initial",
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test("behind branches replace edits and untracked files, but retain ignored local data", async () => {
   const f = await fixture();
   try {

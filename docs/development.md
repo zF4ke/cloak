@@ -21,7 +21,9 @@ npm run smoke:native
 
 Tests use isolated real Git repositories for imports, ignored files, update policies, concurrency, selected commits, tracking branches and corrupt Git metadata. Installer tests cover retained user data, replacement, rollback, running apps and junction refusal.
 
-The native smoke test starts the packaged app and NSIS installer with temporary data. It checks real preload/IPC, sandbox, menu insets, keyboard dismissal, accessibility, setup extraction, copied app and bundled CLI. It does not migrate live projects or modify normal startup/registration. Screenshots go to `tmp/native`. Inspect resized windows, long content, dialogs, keyboard focus and reduced motion after UI changes.
+The native smoke test starts the packaged app and NSIS installer with temporary data. It checks real preload/IPC, sandbox, menu insets, keyboard dismissal, accessibility, onboarding, setup extraction, copied app and bundled CLI. It does not migrate live projects or modify normal startup/registration. Screenshots go to `tmp/native`. Inspect resized windows, long content, dialogs, keyboard focus and reduced motion after UI changes.
+
+`npm run smoke:native -- --install-local` also installs Cloak for the current Windows account and checks its uninstall registration, Start menu shortcut and CLI PATH. This intentionally changes the normal installation. Quit an installed Cloak first. Test projects remain isolated and are removed afterward; the installed app remains available.
 
 ## Package and release
 
@@ -29,4 +31,6 @@ Install [NSIS](https://nsis.sourceforge.io/) and run `npm run installer`. The po
 
 Update `package.json`, build, test, inspect UI and review against the feature spec. Zip the portable folder, generate SHA-256 checksums, and publish artifacts targeting the reviewed commit. Explain limitations in release notes. Binaries are unsigned.
 
-The personal UI skill lives in private `zF4ke/skills`. Its README explains installation. `npm run skill:install` expects a sibling skills checkout; pass `-Source` to the PowerShell helper for another path.
+The native icon is generated from the owned SVG with transparency. To regenerate PNG/ICO assets after editing the mark, use Python with PyMuPDF and Pillow, then run `python scripts/generate-icons.py`. Normal app builds use the committed assets and do not need Python.
+
+The personal UI skill lives in private `zF4ke/skills`. Its README explains installation through the skills.sh CLI. It is independent of Cloak's installation and source tree.

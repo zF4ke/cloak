@@ -32,11 +32,13 @@ test("multiple processes recover a dead owner once and serialize subsequent work
       JSON.stringify({ pid, token }),
     );
     await writeFile(join(root, "counter"), "0");
-    await Promise.all(
+    const workers = await Promise.allSettled(
       Array.from({ length: 5 }, () =>
         child([resolve("tests/lock-worker.ts"), root]),
       ),
     );
+    for (const worker of workers)
+      if (worker.status === "rejected") throw worker.reason;
     assert.equal(await readFile(join(root, "counter"), "utf8"), "40");
     assert.equal(
       JSON.parse(
