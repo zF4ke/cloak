@@ -51,6 +51,7 @@ export class Service {
     await this.projects.initialize();
     if (this.desktop) await this.protection.refresh();
     if (this.desktop) await this.projects.cleanupRecoveries();
+    if (this.desktop) await this.projects.migrateShortcuts();
     // Reuse an existing configured Projects folder for links on first setup.
     const settings = this.projects.settings();
     const config = await this.protection.config();

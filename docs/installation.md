@@ -16,7 +16,7 @@ Extract the release's `Cloak-<version>-win-x64.zip` outside OneDrive and open `C
 
 ## Uninstall
 
-Quit from the tray, then use Windows Installed apps or Uninstall Cloak in the Start menu. This removes app files, app PATH and startup entries. It also stops/removes original protection if installed. Managed projects, junctions and local settings remain. Restore temporary junction-cloaked folders before uninstalling if you want them at their original paths.
+Quit from the tray, then use Windows Installed apps or Uninstall Cloak in the Start menu. This removes app files, app PATH and startup entries. It also stops/removes original protection if installed. Managed projects, project shortcuts and local settings remain. Restore temporary junction-cloaked folders before uninstalling if you want them at their original paths.
 
 | Location under `%LOCALAPPDATA%\cloak` | Contents                                           |
 | ------------------------------------- | -------------------------------------------------- |

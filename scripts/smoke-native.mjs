@@ -1,5 +1,12 @@
 import { spawn, execFileSync } from "node:child_process";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  writeFile,
+  lstat,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
@@ -168,9 +175,33 @@ try {
     git(["add", "README.md"]);
     git(["commit", "-m", "Initial fixture"]);
     git(["remote", "add", "origin", remote]);
-    await native.evaluate(
+    const added = await native.evaluate(
       `window.cloak.create(${JSON.stringify({ mode: "import", name, source, repository: remote, visibility: "private", createRepository: false, useRemote: true })})`,
     );
+    assert.equal(added.warning, undefined);
+    assert.equal(added.project.link, join(settings.linksFolder, `${name}.lnk`));
+    assert.equal((await lstat(added.project.link)).isFile(), true);
+    assert.equal((await lstat(added.project.link)).isSymbolicLink(), false);
+    const shortcut = JSON.parse(
+      execFileSync(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          resolve("release/Cloak/resources/app/scripts/project-shortcut.ps1"),
+          "-Encoded",
+          Buffer.from(
+            JSON.stringify({ action: "read", path: added.project.link }),
+          ).toString("base64"),
+        ],
+        { encoding: "utf8", windowsHide: true },
+      ),
+    );
+    assert.equal(shortcut.target, added.project.path);
+    assert.equal(shortcut.arguments, "");
   }
   await native.call("Page.reload", {});
   await pause(1500);

@@ -2,7 +2,7 @@ import {
   mkdir,
   readFile,
   rename,
-  symlink,
+  unlink,
   realpath,
   lstat,
   writeFile,
@@ -21,6 +21,7 @@ import {
 import { gitState, githubUrl } from "./git.ts";
 import { replaceFromRemote } from "./recovery.ts";
 import { cleanupRecoveries } from "./recovery-cleanup.ts";
+import { createShortcut, shortcutMatches, shortcutPath } from "./shortcuts.ts";
 import type { Run } from "./commands.ts";
 import type {
   Inspection,
@@ -123,8 +124,8 @@ export class Projects {
     )
       throw new Error("Check the folder and update settings.");
     const links = await resolvedPath(settings.linksFolder);
-    if (inside(root, links))
-      throw new Error("Folder links must be outside the real project folder.");
+    if (settings.createLinks && inside(root, links))
+      throw new Error("Shortcuts must be outside the real project folder.");
   }
   async inspect(path: string): Promise<Inspection> {
     const actual = await realpath(path);
@@ -213,12 +214,11 @@ export class Projects {
             git: await gitState(project.path, this.run),
             linkMissing: Boolean(
               project.link &&
-              !(await lstat(project.link).then(
-                async (stat) =>
-                  stat.isSymbolicLink() &&
-                  resolve(await realpath(project.link!)) ===
-                    resolve(project.path),
-                () => false,
+              !(await shortcutMatches(
+                project.link,
+                project.path,
+                this.scripts,
+                this.run,
               )),
             ),
             update: this.updates.get(project.id),
@@ -238,30 +238,38 @@ export class Projects {
     if (!project) throw new Error("Project not found.");
     return structuredClone(project);
   }
+  async migrateShortcuts() {
+    await this.initialize();
+    if (!this.state.settings.createLinks) return;
+    for (const project of this.state.projects) {
+      if (
+        project.legacyLink ||
+        (project.link && !project.link.toLowerCase().endsWith(".lnk"))
+      ) {
+        try {
+          await this.repairLink(project.id);
+        } catch (error) {
+          this.recoveryWarnings.push(
+            `Shortcut conversion pending for ${project.name}: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      }
+    }
+  }
   private async link(
     project: ManagedProject,
     onCreated?: (link: string) => Promise<void>,
   ) {
     if (!this.state.settings.createLinks) return undefined;
     const folder = resolve(this.state.settings.linksFolder),
-      link = join(folder, project.name);
+      link = shortcutPath(folder, project.name);
     await mkdir(folder, { recursive: true });
     if (await exists(link)) {
-      const stat = await lstat(link);
-      if (
-        stat.isSymbolicLink() &&
-        resolve(await realpath(link)) === resolve(project.path)
-      )
+      if (await shortcutMatches(link, project.path, this.scripts, this.run))
         return link;
-      throw new Error(
-        `A folder named ${project.name} already exists in ${folder}. Choose another name or link folder.`,
-      );
+      throw new Error(`The shortcut path is already occupied: ${link}`);
     }
-    await symlink(
-      project.path,
-      link,
-      process.platform === "win32" ? "junction" : "dir",
-    );
+    await createShortcut(link, project.path, this.scripts, this.run);
     await onCreated?.(link);
     return link;
   }
@@ -322,21 +330,19 @@ export class Projects {
           "Source and destination folders must not contain each other.",
         );
       if (settings.createLinks) {
-        const link = join(resolve(settings.linksFolder), name);
+        const link = shortcutPath(settings.linksFolder, name);
         if (resolve(link) === resolve(target))
           throw new Error(
-            "The folder link must be separate from the real folder.",
+            "The shortcut must be separate from the real folder.",
           );
         if (
           (await exists(link)) &&
           (!inspection || resolve(link) !== resolve(inspection.path))
         ) {
-          const stat = await lstat(link);
-          if (
-            !stat.isSymbolicLink() ||
-            resolve(await realpath(link)) !== resolve(target)
-          )
-            throw new Error(`The link folder already contains ${name}.`);
+          if (!(await shortcutMatches(link, target, this.scripts, this.run)))
+            throw new Error(
+              `The shortcuts folder already contains ${name}.lnk.`,
+            );
         }
       }
       const cloneUrl =
@@ -386,14 +392,14 @@ export class Projects {
               remote: cloneUrl!,
               addedAt: new Date().toISOString(),
               link: settings.createLinks
-                ? join(resolve(settings.linksFolder), name)
+                ? shortcutPath(settings.linksFolder, name)
                 : undefined,
             };
             let warning: string | undefined;
             try {
               project.link = await this.link(project, onLinkCreated);
             } catch (error) {
-              warning = `Project recovered. Folder link failed: ${error instanceof Error ? error.message : String(error)}`;
+              warning = `Project recovered. Shortcut failed: ${error instanceof Error ? error.message : String(error)}`;
             }
             const next = {
               ...this.state,
@@ -488,7 +494,7 @@ export class Projects {
           ?.remote,
         addedAt: new Date().toISOString(),
         link: settings.createLinks
-          ? join(resolve(settings.linksFolder), name)
+          ? shortcutPath(settings.linksFolder, name)
           : undefined,
       };
       try {
@@ -496,7 +502,7 @@ export class Projects {
       } catch (error) {
         warning = [
           warning,
-          `Project added. Folder link failed: ${error instanceof Error ? error.message : String(error)}`,
+          `Project added. Shortcut failed: ${error instanceof Error ? error.message : String(error)}`,
         ]
           .filter(Boolean)
           .join(" ");
@@ -513,6 +519,24 @@ export class Projects {
   async repairLink(id: string) {
     return this.serial(async () => {
       const project = this.project(id);
+      await this.validateSettings(this.state.settings);
+      if (!this.state.settings.createLinks)
+        throw new Error("Enable project shortcuts in Settings first.");
+      const previousLink = project.legacyLink ?? project.link;
+      const previousStat =
+        previousLink && !previousLink.toLowerCase().endsWith(".lnk")
+          ? await lstat(previousLink, { bigint: true }).catch((error) => {
+              if ((error as NodeJS.ErrnoException).code === "ENOENT")
+                return undefined;
+              throw error;
+            })
+          : undefined;
+      const ownedJunction =
+        previousStat?.isSymbolicLink() &&
+        resolve(await realpath(previousLink!)) === resolve(project.path);
+      if (previousStat && !ownedJunction)
+        throw new Error("The old folder link changed. It was not removed.");
+      if (ownedJunction) project.legacyLink = previousLink;
       project.link = await this.link(project);
       const next = {
         ...this.state,
@@ -520,6 +544,23 @@ export class Projects {
       };
       await this.store.write(next);
       this.state = next;
+      // Convert only the recorded, verified junction, after registering its replacement.
+      if (ownedJunction) {
+        const current = await lstat(previousLink!, { bigint: true });
+        if (
+          current.isSymbolicLink() &&
+          current.dev === previousStat!.dev &&
+          current.ino === previousStat!.ino &&
+          resolve(await realpath(previousLink!)) === resolve(project.path)
+        )
+          await unlink(previousLink!);
+        else
+          throw new Error("The old folder link changed. It was not removed.");
+      }
+      if (project.legacyLink) {
+        delete project.legacyLink;
+        await this.store.write(next);
+      }
     });
   }
   async forget(id: string) {

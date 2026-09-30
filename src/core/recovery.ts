@@ -149,10 +149,13 @@ export async function replaceFromRemote<T extends { warning?: string }>(
       if (createdLink && (await exists(createdLink.path))) {
         const stat = await lstat(createdLink.path, { bigint: true });
         if (
-          stat.isSymbolicLink() &&
+          (stat.isSymbolicLink() ||
+            (stat.isFile() &&
+              createdLink.path.toLowerCase().endsWith(".lnk"))) &&
           stat.dev === createdLink.dev &&
           stat.ino === createdLink.ino &&
-          resolve(await realpath(createdLink.path)) === resolve(plan.target)
+          (!stat.isSymbolicLink() ||
+            resolve(await realpath(createdLink.path)) === resolve(plan.target))
         )
           await rm(createdLink.path);
       }

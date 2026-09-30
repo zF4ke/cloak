@@ -422,9 +422,9 @@ export function Onboarding({
                 )}
                 {snapshot.settings.createLinks && (
                   <div>
-                    <dt>Folder link</dt>
+                    <dt>Shortcut</dt>
                     <dd>
-                      {snapshot.settings.linksFolder}\{name}
+                      {snapshot.settings.linksFolder}\{name}.lnk
                     </dd>
                   </div>
                 )}

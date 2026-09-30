@@ -2,7 +2,7 @@
 
 ## Choose folders and sign in
 
-Open Settings. Real project folders defaults to `%USERPROFILE%\Projects` and must resolve outside detected OneDrive roots. Links folder receives optional Windows directory junctions. Changing these roots affects new projects; it does not move existing entries.
+Open Settings. Real project folders defaults to `%USERPROFILE%\Projects` and must resolve outside detected OneDrive roots. Shortcuts folder receives optional Windows .lnk folder shortcuts. Keep your existing OneDrive www/Projects folder here so ordinary projects still sync. Explorer opens each shortcut; editors and terminals use the real local project path. Changing these roots affects new projects; it does not move existing entries.
 
 Install Git and GitHub CLI. Run `gh auth login` and `gh auth setup-git` in a terminal. Git also needs your name and email for commits. Settings shows the active GitHub CLI account.
 
@@ -18,11 +18,11 @@ The entire folder moves, including `.git` and ignored local files. Close editors
 
 | Current location                                                  | What Add existing does                                                                                         |
 | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Inside your OneDrive Projects folder                              | Moves the folder to the real project root and creates the optional link.                                       |
-| Already at the configured real root under the chosen project name | Keeps the folder in place, registers it and creates the optional link.                                         |
-| Anywhere else                                                     | Moves the folder to the configured real root and creates the optional link. The same-drive rule still applies. |
+| Inside your OneDrive Projects folder                              | Moves the folder to the real project root and creates the optional shortcut.                                       |
+| Already at the configured real root under the chosen project name | Keeps the folder in place, registers it and creates the optional shortcut.                                         |
+| Anywhere else                                                     | Moves the folder to the configured real root and creates the optional shortcut. The same-drive rule still applies. |
 
-If repository or link setup fails after a move, Cloak keeps and registers the local folder with a warning. Open details to Connect repository or Restore folder link. If Git initialization failed, repair Git in the retained folder first. Do not delete the folder to clear an error.
+If repository or shortcut setup fails after a move, Cloak keeps and registers the local folder with a warning. Open details to Connect repository or Restore shortcut. If Git initialization failed, repair Git in the retained folder first. Do not delete the folder to clear an error.
 
 ## Clone repository
 
@@ -30,7 +30,7 @@ Enter a GitHub HTTPS or SSH URL, then confirm the project name and paths. Privat
 
 ## Project controls
 
-Click a project row to show its real folder, link, repository, changes and concrete errors. Open folder launches Explorer. The repository link opens GitHub. Restore folder link recreates a missing link without replacing another folder. Remove from Cloak only removes the list entry; the folder, junction and GitHub repository remain.
+Click a project row to show its real folder, shortcut, repository, changes and concrete errors. Open folder launches Explorer. The repository link opens GitHub. Restore shortcut recreates a missing shortcut without replacing another entry. Remove from Cloak only removes the list entry; the folder, shortcut and GitHub repository remain.
 
 Search appears after three projects. Needs attention means an operation failed; open the row to inspect the reason.
 
@@ -46,7 +46,7 @@ Sync explicitly pulls and pushes. With local changes, the app asks for a commit 
 
 ## Another PC
 
-Install Cloak, Git and GitHub CLI there, sign in, choose its local roots and Clone repository. Each PC needs its own clone and junction. Push committed work before switching. Transfer ignored credentials, environment files and databases separately. Do not sync `.git`, dependencies or the Cloak registry through OneDrive.
+Install Cloak, Git and GitHub CLI there, sign in, choose its local roots and Clone repository. Each PC needs its own clone and shortcut. Push committed work before switching. Transfer ignored credentials, environment files and databases separately. Do not sync `.git`, dependencies or the Cloak registry through OneDrive.
 
 ## Recovery
 
@@ -54,7 +54,7 @@ If Add existing reports that Git cannot read a repository, turn on **Use latest 
 
 This recovery replaces the entire local copy with committed remote content. It deletes unpublished commits, edited files, untracked files and ignored files, including credentials, databases and dependencies. It does not modify GitHub. Ordinary Add existing and automatic updates retain their existing policies.
 
-Cloak clones and verifies the remote outside OneDrive before moving the old folder. A failed clone leaves the original in place. A failed registration restores it. Successful recovery removes the displaced copy and creates the configured folder link. If a process or OneDrive prevents a move, close it and retry. If cleanup fails, the warning gives the retained folder path. Linked worktrees require manual Git repair. A healthy repository cannot use this recovery mode.
+Cloak clones and verifies the remote outside OneDrive before moving the old folder. A failed clone leaves the original in place. A failed registration restores it. Successful recovery removes the displaced copy and creates the configured project shortcut. If a process or OneDrive prevents a move, close it and retry. If cleanup fails, the warning gives the retained folder path. Linked worktrees require manual Git repair. A healthy repository cannot use this recovery mode.
 
 ### Locked folders
 
@@ -78,7 +78,7 @@ Cleanup removes abandoned disposable clones. It removes a displaced original onl
 | Authentication fails           | Run `gh auth status`, `gh auth login` and `gh auth setup-git`, then retry.                                                                 |
 | No commit yet                  | Select files in Sync and make the first commit.                                                                                            |
 | Histories differ               | Resolve the branch in Git, then Sync.                                                                                                      |
-| Missing link                   | Open details and Restore folder link.                                                                                                      |
+| Missing shortcut                   | Open details and Restore shortcut.                                                                                                      |
 | Missing repository after setup | Open details and Connect repository.                                                                                                       |
 | Unreadable registry            | Quit Cloak and repair `%LOCALAPPDATA%\cloak\projects.json`. Keep project folders.                                                          |
 | Move fails                     | Use Unlock folder for app locks. Cloud-provider retries are automatic; finish OneDrive sign-in if requested. Use a same-drive destination. |

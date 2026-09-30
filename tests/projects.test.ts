@@ -19,6 +19,7 @@ import { once } from "node:events";
 import { Projects } from "../src/core/projects.ts";
 import { gitState } from "../src/core/git.ts";
 import { run, type Run } from "../src/core/commands.ts";
+import { createShortcut, shortcutMatches } from "../src/core/shortcuts.ts";
 import type { Settings } from "../src/shared/types.ts";
 
 async function fixture() {
@@ -168,15 +169,30 @@ test("selected names with Git wildcard characters are treated literally", async 
     await f.close();
   }
 });
-test("import moves the whole folder outside OneDrive and creates a transparent folder link", async () => {
+test("import preserves local files outside OneDrive and creates an ordinary shell shortcut", async () => {
   const f = await fixture();
   try {
     await writeFile(join(f.source, ".env"), "secret");
     const result = await f.add();
     assert.equal(result.warning, undefined);
-    assert.equal(await realpath(f.source), result.project.path);
-    assert.equal((await lstat(f.source)).isSymbolicLink(), true);
-    assert.equal(await readFile(join(f.source, ".env"), "utf8"), "secret");
+    await assert.rejects(lstat(f.source), { code: "ENOENT" });
+    assert.equal(result.project.link, `${f.source}.lnk`);
+    assert.equal((await lstat(result.project.link!)).isFile(), true);
+    assert.equal((await lstat(result.project.link!)).isSymbolicLink(), false);
+    assert.equal(
+      await shortcutMatches(
+        result.project.link!,
+        result.project.path,
+        process.cwd(),
+        run,
+      ),
+      true,
+    );
+    assert.equal(
+      await readFile(join(result.project.path, ".env"), "utf8"),
+      "secret",
+    );
+    await assert.rejects(readFile(join(result.project.link!, "README.md")));
     assert.equal((await f.projects.views())[0]?.git?.branch, "main");
     const again = new Projects(
       join(f.root, "state"),
@@ -209,7 +225,10 @@ test("import registers a project already at the real destination without moving 
       await readFile(join(target, ".env"), "utf8"),
       "retained local data",
     );
-    assert.equal(await realpath(project.link!), await realpath(target));
+    assert.equal(
+      await shortcutMatches(project.link!, target, process.cwd(), run),
+      true,
+    );
   } finally {
     await f.close();
   }
@@ -226,7 +245,7 @@ test("a failed initial link remains visible and can be repaired without moving t
         args[0] === "-C" &&
         args[1] === join(f.local, "project")
       ) {
-        await mkdir(f.source);
+        await mkdir(`${f.source}.lnk`);
         obstructed = true;
       }
       return run(command, args, options);
@@ -245,17 +264,188 @@ test("a failed initial link remains visible and can be repaired without moving t
       createRepository: false,
       visibility: "private",
     });
-    assert.match(result.warning ?? "", /Folder link failed/);
+    assert.match(result.warning ?? "", /Shortcut failed/);
     assert.equal((await projects.views())[0]?.linkMissing, true);
-    assert.equal(result.project.link, f.source);
-    await rm(f.source, { recursive: true });
+    assert.equal(result.project.link, `${f.source}.lnk`);
+    await rm(`${f.source}.lnk`, { recursive: true });
     await projects.repairLink(result.project.id);
     assert.equal((await projects.views())[0]?.linkMissing, false);
-    assert.equal(await realpath(f.source), await realpath(result.project.path));
+    assert.equal(
+      await shortcutMatches(
+        result.project.link!,
+        result.project.path,
+        process.cwd(),
+        run,
+      ),
+      true,
+    );
     assert.equal(
       (await readFile(join(result.project.path, "README.md"), "utf8")).trim(),
       "initial",
     );
+  } finally {
+    await f.close();
+  }
+});
+
+test("removing a shortcut leaves the real project intact and repair recreates it", async () => {
+  const f = await fixture();
+  try {
+    const { project } = await f.add();
+    await rm(project.link!);
+    assert.equal((await f.projects.views())[0]?.linkMissing, true);
+    assert.equal(
+      await f.git(project.path, "show", "HEAD:README.md"),
+      "initial",
+    );
+    await f.projects.repairLink(project.id);
+    assert.equal((await f.projects.views())[0]?.linkMissing, false);
+  } finally {
+    await f.close();
+  }
+});
+
+test("shortcut paths with Unicode and shell punctuation round trip without execution", async () => {
+  const f = await fixture();
+  try {
+    const target = join(f.local, "Café's $project");
+    const shortcut = join(f.cloud, "Café's $project.lnk");
+    await mkdir(target);
+    await writeFile(join(target, "keep.txt"), "retained");
+    await createShortcut(shortcut, target, process.cwd(), run);
+    assert.equal(
+      await shortcutMatches(shortcut, target, process.cwd(), run),
+      true,
+    );
+    await assert.rejects(createShortcut(shortcut, target, process.cwd(), run), {
+      code: "EEXIST",
+    });
+    assert.equal(await readFile(join(target, "keep.txt"), "utf8"), "retained");
+  } finally {
+    await f.close();
+  }
+});
+
+test("shortcut repair refuses a foreign target and preserves its bytes", async () => {
+  const f = await fixture();
+  try {
+    const { project } = await f.add();
+    await rm(project.link!);
+    await createShortcut(project.link!, f.seed, process.cwd(), run);
+    const bytes = await readFile(project.link!);
+    await assert.rejects(f.projects.repairLink(project.id), /already occupied/);
+    assert.deepEqual(await readFile(project.link!), bytes);
+    assert.equal(
+      await f.git(project.path, "show", "HEAD:README.md"),
+      "initial",
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test("desktop migration replaces only registered junctions with shortcuts", async () => {
+  const f = await fixture();
+  try {
+    const { project } = await f.add();
+    await rm(project.link!);
+    await symlink(project.path, f.source, "junction");
+    const registry = join(f.root, "state", "projects.json");
+    const state = JSON.parse(await readFile(registry, "utf8"));
+    state.projects[0].link = f.source;
+    await writeFile(registry, JSON.stringify(state));
+    await f.projects.migrateShortcuts();
+    assert.deepEqual(f.projects.recoveryWarnings, []);
+    await assert.rejects(lstat(f.source), { code: "ENOENT" });
+    assert.equal(
+      await shortcutMatches(
+        `${f.source}.lnk`,
+        project.path,
+        process.cwd(),
+        run,
+      ),
+      true,
+    );
+    assert.equal(
+      await f.git(project.path, "show", "HEAD:README.md"),
+      "initial",
+    );
+    const migrated = JSON.parse(await readFile(registry, "utf8"));
+    assert.equal(migrated.projects[0].link, `${f.source}.lnk`);
+    assert.equal(migrated.projects[0].legacyLink, undefined);
+    // A substituted real folder is never removed during a retry.
+    await mkdir(f.source);
+    await writeFile(join(f.source, "keep.txt"), "unrelated");
+    migrated.projects[0].legacyLink = f.source;
+    await writeFile(registry, JSON.stringify(migrated));
+    await f.projects.migrateShortcuts();
+    assert.match(f.projects.recoveryWarnings[0]!, /old folder link changed/);
+    assert.equal(
+      await readFile(join(f.source, "keep.txt"), "utf8"),
+      "unrelated",
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test("new and cloned projects create shell shortcuts with the configured setting", async () => {
+  const f = await fixture();
+  try {
+    await f.git(f.remote, "symbolic-ref", "HEAD", "refs/heads/main");
+    const execute: Run = async (command, args, options) => {
+      if (command === "gh") {
+        if (args[0] === "repo")
+          await f.git(
+            args[args.indexOf("--source") + 1]!,
+            "remote",
+            "add",
+            "origin",
+            f.remote,
+          );
+        return "";
+      }
+      if (command === "git" && args[0] === "clone")
+        args = args.map((arg) =>
+          arg === "https://github.com/cloak-test/project.git" ? f.remote : arg,
+        );
+      return run(command, args, options);
+    };
+    const projects = new Projects(
+      join(f.root, "new-state"),
+      f.settings,
+      [f.cloud],
+      execute,
+    );
+    for (const mode of ["new", "clone"] as const) {
+      const { project, warning } = await projects.create({
+        mode,
+        name: mode,
+        repository:
+          mode === "new" ? "new" : "https://github.com/cloak-test/project.git",
+        visibility: "private",
+        useRemote: mode === "clone",
+        createRepository: mode === "new",
+      });
+      assert.equal(warning, undefined);
+      assert.equal(
+        await shortcutMatches(project.link!, project.path, process.cwd(), run),
+        true,
+      );
+    }
+    await projects.saveSettings({ ...f.settings, createLinks: false });
+    const { project } = await projects.create({
+      mode: "clone",
+      name: "without-shortcut",
+      repository: "https://github.com/cloak-test/project.git",
+      visibility: "private",
+      useRemote: true,
+      createRepository: false,
+    });
+    assert.equal(project.link, undefined);
+    await assert.rejects(lstat(join(f.cloud, "without-shortcut.lnk")), {
+      code: "ENOENT",
+    });
   } finally {
     await f.close();
   }
@@ -574,8 +764,11 @@ test("explicit recovery clones latest tracked branch, replaces all local files, 
     );
     for (const path of [".env", "draft.txt", "unpublished.txt"])
       await assert.rejects(readFile(join(project.path, path)));
-    assert.equal(await realpath(f.source), project.path);
-    assert.equal((await lstat(f.source)).isSymbolicLink(), true);
+    await assert.rejects(lstat(f.source), { code: "ENOENT" });
+    assert.equal(
+      await shortcutMatches(project.link!, project.path, process.cwd(), run),
+      true,
+    );
     assert.equal((await f.projects.views())[0]?.git?.branch, "main");
     assert.deepEqual(await readdir(f.local), ["project"]);
   } finally {
@@ -595,7 +788,10 @@ test("unreadable HEAD uses the sole origin tracking branch and can recover in pl
     const { project } = await f.recover(target);
     assert.equal(project.path, target);
     assert.equal((await f.projects.views())[0]?.git?.hasCommit, true);
-    assert.equal(await realpath(f.source), target);
+    assert.equal(
+      await shortcutMatches(project.link!, target, process.cwd(), run),
+      true,
+    );
     assert.deepEqual(await readdir(f.local), ["project"]);
   } finally {
     await f.close();
@@ -792,7 +988,7 @@ test("a link collision after cloning keeps the recovered project registered and 
   const f = await recoveryFixture();
   try {
     const settings = { ...f.settings, linksFolder: join(f.cloud, "links") };
-    const link = join(settings.linksFolder, "project");
+    const link = join(settings.linksFolder, "project.lnk");
     await writeFile(join(f.source, ".git", "index"), "");
     const execute: Run = async (command, args, options) => {
       const result = await f.execute(command, args, options);
@@ -816,12 +1012,15 @@ test("a link collision after cloning keeps the recovered project registered and 
       createRepository: false,
       recovery: { confirmed: true, branch: "main" },
     });
-    assert.match(result.warning ?? "", /Folder link failed/);
+    assert.match(result.warning ?? "", /Shortcut failed/);
     assert.equal((await projects.views())[0]?.linkMissing, true);
     assert.deepEqual(await readdir(f.local), ["project"]);
     await rm(link, { recursive: true });
     await projects.repairLink(result.project.id);
-    assert.equal(await realpath(link), result.project.path);
+    assert.equal(
+      await shortcutMatches(link, result.project.path, process.cwd(), run),
+      true,
+    );
   } finally {
     await f.close();
   }
@@ -875,7 +1074,7 @@ test("registration rollback retains a folder link created by another process dur
   const f = await recoveryFixture();
   try {
     const settings = { ...f.settings, linksFolder: join(f.cloud, "links") };
-    const link = join(settings.linksFolder, "project");
+    const link = join(settings.linksFolder, "project.lnk");
     const target = join(f.local, "project");
     await mkdir(settings.linksFolder);
     await writeFile(join(f.source, ".git", "index"), "");

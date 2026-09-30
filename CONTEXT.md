@@ -4,7 +4,7 @@
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | Managed project      | A local Git folder recorded in Cloak's project list.                                                                                         | A clone under the configured local Projects folder. |
 | Real project folder  | The folder that stores source code, `.git` and local files outside OneDrive.                                                                 | `C:\Users\you\Projects\ada`.                        |
-| Folder link          | A directory junction that opens the real folder from another location. It is not a second copy.                                              | A Projects entry inside OneDrive.                   |
+| Project shortcut     | An ordinary Windows shortcut file that opens a real project folder. It does not expose its contents through the synced directory.            | `ada.lnk` alongside ordinary OneDrive projects.     |
 | Origin               | The Git remote used to fetch and push a managed project's commits.                                                                           | A GitHub repository URL.                            |
 | Tracking branch      | The origin branch that a local branch follows.                                                                                               | Local `work` can track `origin/main`.               |
 | Behind               | The remote has commits absent locally, and the local branch has no extra commits.                                                            | A commit pushed on another PC.                      |

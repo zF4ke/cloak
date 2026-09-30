@@ -1,11 +1,11 @@
 <p align="center"><img src="assets/mark.svg" width="64" alt="Cloak" /></p>
 <h1 align="center">Cloak</h1>
-<p align="center">Keep Git projects outside OneDrive, with folder links where you work.</p>
+<p align="center">Keep Git projects outside OneDrive, with shortcuts where you work.</p>
 <p align="center"><a href="https://github.com/zF4ke/cloak/releases/latest">Download for Windows</a> / <a href="docs/projects.md">Project guide</a> / <a href="docs/cli.md">CLI</a> / <a href="docs/development.md">Development</a></p>
 
 <p align="center"><img src="docs/images/projects-rounded.svg" width="760" alt="Cloak project manager" /></p>
 
-OneDrive can duplicate source files and corrupt Git metadata while syncing an active repository. Cloak stores the real folder outside OneDrive, uses GitHub for commits, and leaves an optional directory junction in your familiar Projects folder. Editors and terminals can open it normally. The original pause/resume tool remains available for ordinary OneDrive projects.
+OneDrive can duplicate source files and corrupt Git metadata while syncing an active repository. Cloak stores the real folder outside OneDrive, uses GitHub for commits, and leaves an optional folder shortcut in your familiar Projects folder. Ordinary projects there still sync through OneDrive. Open Git projects from Explorer or use their real local paths in editors and terminals. The original pause/resume tool remains available for ordinary OneDrive projects.
 
 ## Get started
 
@@ -36,13 +36,13 @@ Use Sync to publish work. Select changed files and write a commit message. Other
 ## What you can do
 
 - Create GitHub repositories, import whole projects and clone repositories.
-- Inspect changes, open folders or GitHub, repair missing links and remove entries without deleting files.
+- Inspect changes, open folders or GitHub, repair missing shortcuts and remove entries without deleting files.
 - Use the same project engine from the [CLI](docs/cli.md).
 - Keep the original [OneDrive protection](docs/protection.md), log and temporary junction controls.
 - Install updates without replacing settings or the project list.
 - Find and close apps blocking imports with optional PowerToys integration. Clean abandoned recovery clones automatically. See [recovery](docs/projects.md#recovery).
 
-Microsoft does not support syncing symlinks or junctions with OneDrive. Cloak uses junctions at the owner's request and cannot guarantee that every OneDrive version ignores linked contents. Each PC needs its own clone and link. Read [the folder-link decision](docs/adr/002-folder-links.md).
+A shortcut is a small file, so OneDrive cannot traverse it into the repository. Each PC needs its own clone and a shortcut pointing to its local folder. Read [the shortcut decision](docs/adr/004-project-shortcuts.md).
 
 ## Guides
 

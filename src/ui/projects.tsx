@@ -240,7 +240,7 @@ export function ProjectsView({
               </div>
               {detail.link && (
                 <div>
-                  <dt>Link</dt>
+                  <dt>Shortcut</dt>
                   <dd>{detail.link}</dd>
                 </div>
               )}
@@ -279,11 +279,11 @@ export function ProjectsView({
                   void action(
                     detail.id,
                     () => api.repairLink(detail.id),
-                    "Folder link restored.",
+                    "Shortcut restored.",
                   )
                 }
               >
-                Restore folder link
+                Restore shortcut
               </Button>
             )}
             {!!detail.git?.changes.length && (

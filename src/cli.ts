@@ -62,6 +62,24 @@ async function main() {
         );
       if (!views.length)
         console.log("No managed projects. Use cloak new, add or clone.");
+    } else if (command === "shortcuts") {
+      const args = [argument, ...rest].filter(
+        (value): value is string => value !== undefined,
+      );
+      if (!args.includes("--confirm"))
+        throw new Error(
+          "Use cloak shortcuts [project name] --confirm to create or repair folder shortcuts.",
+        );
+      const name = args.find((value) => value !== "--confirm");
+      const projects = await service.projects.views();
+      const selected = name
+        ? projects.filter((project) => project.name === name)
+        : projects;
+      if (name && !selected.length) throw new Error("Project not found.");
+      for (const project of selected) {
+        await service.projects.repairLink(project.id);
+        console.log(`Shortcut ready: ${project.name}`);
+      }
     } else if (command === "cleanup") {
       await service.projects.cleanupRecoveries();
       if (service.projects.recoveryWarnings.length) {
@@ -90,7 +108,7 @@ async function main() {
         );
       if (!options.has("--confirm"))
         throw new Error(
-          "Add --confirm to authorize project setup, the folder move/link, and repository creation if needed. Repositories are private by default.",
+          "Add --confirm to authorize project setup, the folder move/shortcut, and repository creation if needed. Repositories are private by default.",
         );
       await service.protection.refresh();
       const mode =
@@ -154,7 +172,7 @@ async function main() {
       if (result.warning) console.error(result.warning);
     } else
       throw new Error(
-        "Commands: projects, new, add, clone, sync, check, cleanup. The original OneDrive commands remain in cloak.ps1.",
+        "Commands: projects, new, add, clone, sync, check, shortcuts, cleanup. The original OneDrive commands remain in cloak.ps1.",
       );
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

@@ -1,7 +1,7 @@
 # Local Git folders with junctions in Projects
 
 Date: 2026-09-30
-Status: accepted
+Status: superseded by [project shortcuts](004-project-shortcuts.md)
 
 ## Decision
 

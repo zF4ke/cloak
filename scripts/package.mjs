@@ -56,6 +56,7 @@ for (const script of [
   "folder-locks.ps1",
   "folder-move.ps1",
   "refresh-protection.ps1",
+  "project-shortcut.ps1",
   "config.jsonc",
   "scripts/register-cli.ps1",
   "scripts/register-installation.ps1",

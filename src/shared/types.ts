@@ -12,6 +12,7 @@ export type ManagedProject = {
   name: string;
   path: string;
   link?: string;
+  legacyLink?: string;
   remote?: string;
   addedAt: string;
 };

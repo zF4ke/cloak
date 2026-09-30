@@ -79,20 +79,20 @@ export function SettingsView({
             projects.
           </p>
           <Toggle
-            label="Create folder links"
+            label="Create project shortcuts"
             checked={draft.createLinks}
             onChange={(value) => set("createLinks", value)}
           />
           {draft.createLinks && (
             <label className="field">
-              Links folder
+              Shortcuts folder
               <div className="input-action">
                 <input
                   value={draft.linksFolder}
                   onChange={(event) => set("linksFolder", event.target.value)}
                 />
                 <Button
-                  aria-label="Choose links folder"
+                  aria-label="Choose shortcuts folder"
                   icon={FolderOpen}
                   disabled={!snapshot.desktop}
                   onClick={() => void choose("linksFolder")}

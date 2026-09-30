@@ -12,7 +12,7 @@ flowchart LR
   S --> PR[Protection adapter]
   P --> LOCK[Process lock]
   LOCK --> REG[Local registry]
-  P --> FS[Real folders and junctions]
+  P --> FS[Real folders and shell shortcuts]
   P --> G[Git and GitHub CLI]
   G --> GH[GitHub]
   PR --> PS[PowerShell commands]
@@ -25,7 +25,7 @@ flowchart LR
 | `src/ui`                           | Project/setup/settings views, controls and motion. Reads snapshots and invokes explicit actions. |
 | `src/app`                          | Window, tray, sign-in launch, picker and IPC boundary.                                           |
 | `src/core/service.ts`              | Scheduler and command dispatch shared by desktop/CLI.                                            |
-| `src/core/projects.ts`             | Registry, imports, links and Git mutation policy.                                                |
+| `src/core/projects.ts`             | Registry, imports, shortcuts and Git mutation policy.                                                |
 | `src/core/git.ts`                  | Parsed branch, changes, remote and commit counts.                                                |
 | `src/core/recovery.ts`             | Verified fresh clones, folder swaps, owned-link rollback and displaced-copy cleanup.             |
 | `src/core/lock.ts`                 | Mutation coordination across app and CLI.                                                        |
@@ -38,9 +38,9 @@ flowchart LR
 
 ## Operation flow
 
-Setup collects a plan and validates resolved roots, OneDrive boundaries, repository identity and destination/link collisions. It moves, clones or creates the real folder, configures origin, creates a junction and writes the registry. Post-move failures keep the folder with a repairable warning.
+Setup collects a plan and validates resolved roots, OneDrive boundaries, repository identity and destination/shortcut collisions. It moves, clones or creates the real folder, configures origin, creates an ordinary .lnk shortcut and writes the registry. Post-move failures keep the folder with a repairable warning.
 
-Explicit repository recovery first reads available origin/tracking configuration without depending on the damaged index or HEAD. After opt-in, it clones into a temporary directory under the real project root and verifies a committed branch. It checks that the source directory's identity has not changed, displaces the source, installs the clone, creates or reuses the link and writes the registry. Registration failure restores the original and removes only a link this operation created. Successful registration removes the displaced copy. Retained directories and failed rollback paths appear in the error or warning. See [repository recovery](adr/003-explicit-repository-recovery.md).
+Explicit repository recovery first reads available origin/tracking configuration without depending on the damaged index or HEAD. After opt-in, it clones into a temporary directory under the real project root and verifies a committed branch. It checks that the source directory's identity has not changed, displaces the source, installs the clone, creates or reuses the shortcut and writes the registry. Registration failure restores the original and removes only a shortcut this operation created. Successful registration removes the displaced copy. Retained directories and failed rollback paths appear in the error or warning. See [repository recovery](adr/003-explicit-repository-recovery.md).
 
 An update takes the process lock and reloads the registry. It fetches origin, finds the tracking branch, compares commits and applies policy. HEAD and branch are checked again before replacement. Errors attach to the individual project. Sync optionally commits selected files, requires a clean tree, pulls and pushes.
 
@@ -55,3 +55,7 @@ The Vite preview is read-only. The release uses local IPC and does not start an 
 OneDrive cloud-filter errors can reach Node as `UNKNOWN`. A known OneDrive source takes a separate recovery path: publish an expiring cloud-access lease, resume OneDrive, wait for readable metadata, recheck folder identity, then use a native move with no replacement or copy flags. `folder-move.ps1` returns Windows error codes, including metadata-open failures. Retries stop after one minute. The watcher ignores activity while a live lease exists, then returns to its normal settling policy. A failed move retains the source.
 
 Desktop startup and explicitly confirmed CLI setup refresh a previously installed protection script under the project lock. `refresh-protection.ps1` replaces its deployed copy and restarts only a previously running watcher. It matches the exact deployed script and Windows session, pins each process handle and verifies creation time. Configuration and a stopped watcher's state survive the update. The browser preview does not refresh protection.
+
+## Project shortcuts
+
+`src/core/shortcuts.ts` validates .lnk targets through `project-shortcut.ps1` and publishes shortcut bytes without overwriting an existing entry. The helper uses Windows Shell COM and does not launch the target. Recovery records the created file identity so rollback removes only its own shortcut. Desktop startup converts registered legacy junctions when enabled; read-only discovery does not mutate them. Registry field names remain compatible with previous versions. See [the decision](adr/004-project-shortcuts.md).
