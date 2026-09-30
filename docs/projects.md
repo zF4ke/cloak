@@ -58,6 +58,8 @@ Cloak clones and verifies the remote outside OneDrive before moving the old fold
 
 ### Locked folders
 
+For OneDrive cloud-folder errors, Cloak resumes the local OneDrive client and retries the move for up to one minute. Its protection watcher stays out of the way during that attempt. App startup also updates an already-installed watcher, preserving its configuration and whether it was running. Sign-in or network problems still need attention in OneDrive. Normal import preserves the whole folder; this retry never copies over an existing destination.
+
 After a failed import, choose **Unlock folder**. Cloak uses [Microsoft PowerToys File Locksmith](https://learn.microsoft.com/en-us/windows/powertoys/file-locksmith) to list apps holding the folder or its files. If PowerToys is absent, **Get PowerToys** opens Microsoft's installation guide. You can also close the apps yourself and retry; PowerToys is optional.
 
 **Close apps** requests a normal window close. Background tasks without a window may require quitting their parent editor or terminal. **End locking tasks** is a separate disclosure. Enable **Discard unsaved work**, then choose **End tasks** to terminate the listed tasks. This can stop active coding agents and lose unsaved work. Cloak rechecks the folder, current holders and process start times before acting. It protects its own process, launching processes and Windows services. It does not forcibly close arbitrary file handles or automatically retry replacement.
@@ -70,14 +72,14 @@ Cloak removes temporary clones immediately after a failed attempt and removes di
 
 Cleanup removes abandoned disposable clones. It removes a displaced original only when the registry identifies the verified replacement folder. If replacement was interrupted before registration, it retains `old`, removes the extra clone and reports the original's path. Restore those original files manually. Unknown, altered or currently active recovery folders are not automatically deleted. Older staging folders without a recovery record require manual inspection.
 
-| Problem                        | Action                                                                                                       |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| Destination or link exists     | Inspect it or choose another name. Cloak will not replace it.                                                |
-| Authentication fails           | Run `gh auth status`, `gh auth login` and `gh auth setup-git`, then retry.                                   |
-| No commit yet                  | Select files in Sync and make the first commit.                                                              |
-| Histories differ               | Resolve the branch in Git, then Sync.                                                                        |
-| Missing link                   | Open details and Restore folder link.                                                                        |
-| Missing repository after setup | Open details and Connect repository.                                                                         |
-| Unreadable registry            | Quit Cloak and repair `%LOCALAPPDATA%\cloak\projects.json`. Keep project folders.                            |
-| Move fails                     | Close processes using the folder and use a same-drive destination. The error identifies the retained source. |
-| Git index or HEAD unreadable   | Use latest remote version in Add existing after reviewing the deletion warning, URL and branch.              |
+| Problem                        | Action                                                                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Destination or link exists     | Inspect it or choose another name. Cloak will not replace it.                                                                              |
+| Authentication fails           | Run `gh auth status`, `gh auth login` and `gh auth setup-git`, then retry.                                                                 |
+| No commit yet                  | Select files in Sync and make the first commit.                                                                                            |
+| Histories differ               | Resolve the branch in Git, then Sync.                                                                                                      |
+| Missing link                   | Open details and Restore folder link.                                                                                                      |
+| Missing repository after setup | Open details and Connect repository.                                                                                                       |
+| Unreadable registry            | Quit Cloak and repair `%LOCALAPPDATA%\cloak\projects.json`. Keep project folders.                                                          |
+| Move fails                     | Use Unlock folder for app locks. Cloud-provider retries are automatic; finish OneDrive sign-in if requested. Use a same-drive destination. |
+| Git index or HEAD unreadable   | Use latest remote version in Add existing after reviewing the deletion warning, URL and branch.                                            |

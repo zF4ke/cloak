@@ -455,7 +455,7 @@ export function Onboarding({
       {error && (
         <div ref={errorRegion}>
           <Notice>{error}</Notice>
-          {/folder is open|Windows blocked moving|\b(?:EBUSY|EPERM|EACCES)\b/.test(
+          {/folder is open|Windows (?:blocked|could not) mov|\b(?:EBUSY|EPERM|EACCES|UNKNOWN)\b/.test(
             error,
           ) &&
             step === 2 &&

@@ -43,12 +43,13 @@ export class Service {
       launchAtLogin: false,
       behindEdits: "discard",
     };
-    this.projects = new Projects(directory, defaults, cloud, run);
+    this.projects = new Projects(directory, defaults, cloud, run, scripts);
     this.unlocker = new FolderUnlocker(scripts, run);
     this.protection = new Protection(scripts, directory, run, desktop);
   }
   async initialize() {
     await this.projects.initialize();
+    if (this.desktop) await this.protection.refresh();
     if (this.desktop) await this.projects.cleanupRecoveries();
     // Reuse an existing configured Projects folder for links on first setup.
     const settings = this.projects.settings();

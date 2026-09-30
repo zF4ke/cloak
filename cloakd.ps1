@@ -51,6 +51,17 @@ if (-not $oneDriveExe) { Log "OneDrive.exe not found" Red; exit 2 }
 # ---------- OneDrive control ----------
 function OneDrive-Running { [bool](Get-Process OneDrive -ErrorAction SilentlyContinue) }
 
+function Cloud-AccessActive {
+  foreach ($file in @(Get-ChildItem -LiteralPath (Join-Path $env:LOCALAPPDATA 'cloak') -Filter 'cloud-access-*.json' -File -ErrorAction SilentlyContinue)) {
+    try {
+      $lease = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+      if ([long]$lease.expires -gt [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() -and
+          [int]$lease.pid -gt 0 -and (Get-Process -Id ([int]$lease.pid) -ErrorAction SilentlyContinue)) { return $true }
+    } catch {}
+  }
+  return $false
+}
+
 function Pause-OneDrive($trigger) {
   # Terminate the process directly instead of `OneDrive.exe /shutdown`. /shutdown
   # pops a "Could not shut down OneDrive" dialog whenever it can't exit cleanly;
@@ -138,6 +149,17 @@ try {
       $now = Get-Date
       $idleFor = $now - $shared.last
       $running = OneDrive-Running
+
+      if (Cloud-AccessActive) {
+        # Imports need the cloud provider to release placeholder metadata.
+        Resume-OneDrive
+        $pausedAt = $null
+        $settling = $true
+        $settleFrom = $now
+        $ioPrev = OneDrive-IoBytes
+        $ioQuiet = 0
+        continue
+      }
 
       if ($running) {
         if ($settling) {

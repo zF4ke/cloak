@@ -92,6 +92,7 @@ async function main() {
         throw new Error(
           "Add --confirm to authorize project setup, the folder move/link, and repository creation if needed. Repositories are private by default.",
         );
+      await service.protection.refresh();
       const mode =
         command === "new" ? "new" : command === "add" ? "import" : "clone";
       const inspection =

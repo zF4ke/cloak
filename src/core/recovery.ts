@@ -9,6 +9,7 @@ import {
 } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Run } from "./commands.ts";
+import type { CloudMove } from "./cloud-move.ts";
 import { gitState } from "./git.ts";
 import { exists, inside, moveProjectFolder } from "./paths.ts";
 import { removeRecoveryStage, type RecoveryRecord } from "./recovery-record.ts";
@@ -19,6 +20,7 @@ type Recovery = {
   root: string;
   remote: string;
   branch?: string;
+  cloudMove?: CloudMove;
 };
 
 /** Clone first, swap whole folders, register, then delete only the displaced folder. */
@@ -128,7 +130,7 @@ export async function replaceFromRemote<T extends { warning?: string }>(
       (await exists(plan.target))
     )
       throw new Error(`The destination already exists: ${plan.target}`);
-    await moveProjectFolder(plan.source, old);
+    await moveProjectFolder(plan.source, old, plan.cloudMove);
   } catch (error) {
     const retained = await cleanupMessage();
     throw new Error(`Original folder unchanged. ${message(error)}${retained}`);

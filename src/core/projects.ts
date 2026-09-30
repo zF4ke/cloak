@@ -46,6 +46,7 @@ export class Projects {
     private defaults: Settings,
     private cloudRoots: string[],
     private run: Run,
+    private scripts = process.cwd(),
   ) {
     this.store = new JsonStore(directory, "projects.json");
   }
@@ -360,6 +361,13 @@ export class Projects {
             target,
             root,
             remote: cloneUrl!,
+            cloudMove: inspection!.inOneDrive
+              ? {
+                  scripts: this.scripts,
+                  directory: this.directory,
+                  run: this.run,
+                }
+              : undefined,
             branch: plan.recovery.branch,
           },
           this.run,
@@ -420,10 +428,20 @@ export class Projects {
       await mkdir(root, { recursive: true });
       if (inspection && resolve(inspection.path) !== resolve(target)) {
         try {
-          await moveProjectFolder(inspection.path, target);
+          await moveProjectFolder(
+            inspection.path,
+            target,
+            inspection.inOneDrive
+              ? {
+                  scripts: this.scripts,
+                  directory: this.directory,
+                  run: this.run,
+                }
+              : undefined,
+          );
         } catch (error) {
           throw new Error(
-            `Could not move the folder. Close terminals or apps using it, and use a destination on the same drive. Original folder: ${inspection.path}. ${error instanceof Error ? error.message : ""}`,
+            `Original folder unchanged. ${error instanceof Error ? error.message : "Could not move the folder."}`,
           );
         }
       } else if (plan.mode === "clone")

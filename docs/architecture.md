@@ -31,6 +31,7 @@ flowchart LR
 | `src/core/lock.ts`                 | Mutation coordination across app and CLI.                                                        |
 | `src/core/storage.ts`              | JSON registry writes through temporary file and rename.                                          |
 | `src/core/protection.ts`           | JSONC configuration and PowerShell bridge.                                                       |
+| `src/core/cloud-move.ts`           | Cloud-provider readiness, temporary watcher lease and verified native move retries.              |
 | `src/core/desktop-installation.ts` | Running-app detection and transactional Windows registration.                                    |
 | `src/setup`                        | App-styled installer and staged file replacement.                                                |
 | PowerShell scripts                 | Original watcher and temporary junction records.                                                 |
@@ -50,3 +51,7 @@ NSIS extracts setup into temporary storage. The custom Electron installer stages
 The Vite preview is read-only. The release uses local IPC and does not start an HTTP server. See [the domain glossary](../CONTEXT.md) and [accepted decisions](adr/001-automatic-updates.md).
 
 `FolderUnlocker` owns optional PowerToys discovery, scans and expiring close tickets. `folder-locks.ps1` reads process metadata and requests normal window close or explicit termination after verifying start time. The renderer supplies an opaque ticket, never arbitrary process IDs. File Locksmith is an installed dependency, not bundled with Cloak. `recovery-cleanup.ts` runs under Cloak's project lock and validates staging identity against `recovery.json`. Only a registered matching replacement permits deletion of displaced originals. Pending restore paths appear in the desktop UI.
+
+OneDrive cloud-filter errors can reach Node as `UNKNOWN`. A known OneDrive source takes a separate recovery path: publish an expiring cloud-access lease, resume OneDrive, wait for readable metadata, recheck folder identity, then use a native move with no replacement or copy flags. `folder-move.ps1` returns Windows error codes, including metadata-open failures. Retries stop after one minute. The watcher ignores activity while a live lease exists, then returns to its normal settling policy. A failed move retains the source.
+
+Desktop startup and explicitly confirmed CLI setup refresh a previously installed protection script under the project lock. `refresh-protection.ps1` replaces its deployed copy and restarts only a previously running watcher. It matches the exact deployed script and Windows session, pins each process handle and verifies creation time. Configuration and a stopped watcher's state survive the update. The browser preview does not refresh protection.

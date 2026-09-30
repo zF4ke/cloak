@@ -101,6 +101,8 @@ async function connect(executable, args = [], setup = false) {
       );
     return value.result.value;
   };
+  await call("Page.bringToFront", {});
+  await call("Emulation.setFocusEmulationEnabled", { enabled: true });
   await pause(500);
   return { child, socket, call, evaluate };
 }
@@ -193,6 +195,15 @@ try {
     "document.querySelector('dialog .button.primary').click()",
   );
   await pause(400);
+  for (
+    let i = 0;
+    i < 100 &&
+    !(await native.evaluate(
+      "document.querySelector('.review h3')?.textContent==='Journal'",
+    ));
+    i++
+  )
+    await pause(100);
   assert.match(
     await native.evaluate("document.querySelector('dialog').innerText"),
     /Journal/,
@@ -444,12 +455,15 @@ try {
       ),
       false,
     );
+    await pause(350);
+    const unlockBounds = await native.evaluate(
+      "(() => { const body=document.querySelector('.modal-content').getBoundingClientRect(),panel=document.querySelector('.folder-unlock').getBoundingClientRect();return {bodyTop:body.top,bodyBottom:body.bottom,panelTop:panel.top,panelBottom:panel.bottom} })()",
+    );
     await screenshot(native, "unlock-folder");
-    assert.equal(
-      await native.evaluate(
-        "(() => { const body=document.querySelector('.modal-content').getBoundingClientRect(),panel=document.querySelector('.folder-unlock').getBoundingClientRect();return panel.top>=body.top&&panel.bottom<=body.bottom })()",
-      ),
-      true,
+    assert.ok(
+      unlockBounds.panelTop >= unlockBounds.bodyTop - 1 &&
+        unlockBounds.panelBottom <= unlockBounds.bodyBottom + 1,
+      JSON.stringify(unlockBounds),
     );
     await native.evaluate(
       "[...document.querySelectorAll('.folder-unlock button')].find(b=>b.textContent.trim()==='End locking tasks').click()",

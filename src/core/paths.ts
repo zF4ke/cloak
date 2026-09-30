@@ -1,5 +1,10 @@
 import { lstat, realpath, rename } from "node:fs/promises";
 import {
+  moveCloudFolder,
+  unknownFilesystemError,
+  type CloudMove,
+} from "./cloud-move.ts";
+import {
   basename,
   dirname,
   isAbsolute,
@@ -47,11 +52,30 @@ export const exists = (path: string) =>
       throw error;
     },
   );
-export async function moveProjectFolder(source: string, target: string) {
+export async function moveProjectFolder(
+  source: string,
+  target: string,
+  cloud?: CloudMove,
+) {
+  if (cloud) {
+    try {
+      cloud = { ...cloud, identity: await lstat(source, { bigint: true }) };
+    } catch (error) {
+      if (!unknownFilesystemError(error)) throw error;
+    }
+  }
   try {
     await rename(source, target);
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code;
+    if (
+      process.platform === "win32" &&
+      cloud &&
+      unknownFilesystemError(error)
+    ) {
+      await moveCloudFolder(source, target, cloud);
+      return;
+    }
     if (code === "EBUSY")
       throw new Error(
         "The folder is open in another app. Close editors, terminals and coding-agent sessions, then retry.",
@@ -59,6 +83,12 @@ export async function moveProjectFolder(source: string, target: string) {
     if (code === "EPERM" || code === "EACCES")
       throw new Error(
         "Windows blocked moving this folder. Close apps using it and check folder permissions, then retry.",
+      );
+    if (code === "EXDEV")
+      throw new Error("Choose a destination on the same drive.");
+    if (code === "UNKNOWN" || code?.startsWith("Unknown system error"))
+      throw new Error(
+        "Windows blocked moving this folder. Use Unlock folder, then retry.",
       );
     throw error;
   }
