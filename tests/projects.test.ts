@@ -389,6 +389,36 @@ test("desktop migration replaces only registered junctions with shortcuts", asyn
   }
 });
 
+test("legacy junction names ending in .lnk are converted using their actual file type", async () => {
+  const f = await fixture();
+  try {
+    const { project } = await f.add();
+    await rm(project.link!);
+    const target = `${project.path}.lnk`;
+    const legacy = `${f.source}.lnk`;
+    await rename(project.path, target);
+    await symlink(target, legacy, "junction");
+    const registry = join(f.root, "state", "projects.json");
+    const state = JSON.parse(await readFile(registry, "utf8"));
+    Object.assign(state.projects[0], {
+      name: "project.lnk",
+      path: target,
+      link: legacy,
+    });
+    await writeFile(registry, JSON.stringify(state));
+    await f.projects.migrateShortcuts();
+    assert.deepEqual(f.projects.recoveryWarnings, []);
+    await assert.rejects(lstat(legacy), { code: "ENOENT" });
+    assert.equal(
+      await shortcutMatches(`${legacy}.lnk`, target, process.cwd(), run),
+      true,
+    );
+    assert.equal(await f.git(target, "show", "HEAD:README.md"), "initial");
+  } finally {
+    await f.close();
+  }
+});
+
 test("new and cloned projects create shell shortcuts with the configured setting", async () => {
   const f = await fixture();
   try {

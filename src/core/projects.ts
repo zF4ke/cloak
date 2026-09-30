@@ -242,17 +242,26 @@ export class Projects {
     await this.initialize();
     if (!this.state.settings.createLinks) return;
     for (const project of this.state.projects) {
-      if (
-        project.legacyLink ||
-        (project.link && !project.link.toLowerCase().endsWith(".lnk"))
-      ) {
-        try {
+      try {
+        const path = project.legacyLink ?? project.link;
+        const stat = path
+          ? await lstat(path).catch((error) => {
+              if ((error as NodeJS.ErrnoException).code === "ENOENT")
+                return undefined;
+              throw error;
+            })
+          : undefined;
+        if (
+          project.legacyLink ||
+          stat?.isSymbolicLink() ||
+          (project.link && !project.link.toLowerCase().endsWith(".lnk"))
+        ) {
           await this.repairLink(project.id);
-        } catch (error) {
-          this.recoveryWarnings.push(
-            `Shortcut conversion pending for ${project.name}: ${error instanceof Error ? error.message : String(error)}`,
-          );
         }
+      } catch (error) {
+        this.recoveryWarnings.push(
+          `Shortcut conversion pending for ${project.name}: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
     }
   }
@@ -523,18 +532,21 @@ export class Projects {
       if (!this.state.settings.createLinks)
         throw new Error("Enable project shortcuts in Settings first.");
       const previousLink = project.legacyLink ?? project.link;
-      const previousStat =
-        previousLink && !previousLink.toLowerCase().endsWith(".lnk")
-          ? await lstat(previousLink, { bigint: true }).catch((error) => {
-              if ((error as NodeJS.ErrnoException).code === "ENOENT")
-                return undefined;
-              throw error;
-            })
-          : undefined;
+      const previousStat = previousLink
+        ? await lstat(previousLink, { bigint: true }).catch((error) => {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT")
+              return undefined;
+            throw error;
+          })
+        : undefined;
       const ownedJunction =
         previousStat?.isSymbolicLink() &&
         resolve(await realpath(previousLink!)) === resolve(project.path);
-      if (previousStat && !ownedJunction)
+      const existingShortcut =
+        previousStat?.isFile() &&
+        previousLink?.toLowerCase().endsWith(".lnk") &&
+        !project.legacyLink;
+      if (previousStat && !ownedJunction && !existingShortcut)
         throw new Error("The old folder link changed. It was not removed.");
       if (ownedJunction) project.legacyLink = previousLink;
       project.link = await this.link(project);

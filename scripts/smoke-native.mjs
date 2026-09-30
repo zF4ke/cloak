@@ -571,6 +571,16 @@ try {
   await native.evaluate(
     "document.querySelector('nav button[aria-label=Settings]').click()",
   );
+  await pause(350);
+  assert.match(
+    await native.evaluate("document.body.innerText"),
+    /Create project shortcuts/,
+  );
+  assert.match(
+    await native.evaluate("document.body.innerText"),
+    /Shortcuts folder/,
+  );
+  await screenshot(native, "settings");
   for (
     let i = 0;
     i < 40 &&
@@ -688,6 +698,31 @@ try {
   );
   assert.match(output, /Reader/);
   assert.match(output, /Arcade/);
+  await rm(join(settings.linksFolder, "Reader.lnk"));
+  const shortcutOutput = execFileSync(
+    join(installation, "app", "Cloak.exe"),
+    [
+      join(installation, "app", "resources/app/dist/cli.cjs"),
+      "shortcuts",
+      "Reader",
+      "--confirm",
+    ],
+    {
+      encoding: "utf8",
+      windowsHide: true,
+      env: {
+        ...process.env,
+        ELECTRON_RUN_AS_NODE: "1",
+        CLOAK_DATA_DIR: profile,
+        CLOAK_SCRIPTS_DIR: join(installation, "app", "resources/app/scripts"),
+      },
+    },
+  );
+  assert.match(shortcutOutput, /Shortcut ready: Reader/);
+  assert.equal(
+    (await lstat(join(settings.linksFolder, "Reader.lnk"))).isFile(),
+    true,
+  );
   const packagedCli = (...args) =>
     execFileSync(
       join(installation, "app", "Cloak.exe"),
