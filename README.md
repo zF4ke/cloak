@@ -16,6 +16,8 @@ OneDrive can duplicate source files and corrupt Git metadata while syncing an ac
 
 Repositories default to private. Imports include `.git` and ignored local files. Existing destinations are never overwritten. [The project guide](docs/projects.md) explains setup and recovery.
 
+If Git cannot read an existing project, Add existing offers **Use latest remote version**. Review the repository and branch before choosing Replace and add. This fresh-clone recovery replaces all local files and unpublished commits, including ignored files. The remote stays unchanged.
+
 ## Keep projects current
 
 Cloak fetches at startup and every five minutes by default. Closing the window keeps it in the tray. Enable Launch at Windows sign-in to check after a restart. Choose Quit from the tray to stop checks.

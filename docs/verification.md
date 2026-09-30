@@ -2,6 +2,8 @@
 
 Reviewed on 30 September 2026 against `08b1591` and the accepted [desktop specification](specs/desktop-project-manager.md).
 
+The 0.2.1 recovery change was also reviewed against `d8adbec` and [issue 1](https://github.com/zF4ke/cloak/issues/1). Both review axes reported no remaining material findings after the fixes below.
+
 ## Code review
 
 Independent reviews checked repository standards and the feature specification. Both final passes reported no remaining material findings.
@@ -11,13 +13,16 @@ Independent reviews checked repository standards and the feature specification. 
 | Standards     | Process-lock creation, stale recovery and crash-safe release; original CLI streaming and argument forwarding; installer registration ownership; real-path checks before clearing package output.                                  |
 | Specification | Preservation of ignored files when ignore rules change; incoming tracked-path collisions including Windows case variants; literal Git filenames; visible retry after a link failure; selected-file commits and tracking branches. |
 
+Recovery review fixed source substitution during cloning, rollback ownership of folder links, stale inspection responses and unreported staging cleanup failures. The UI pass fixed dialog footer overlap and moved the deletion consequence above long paths in final review.
+
 ## Completed checks
 
 - TypeScript check and production build passed.
-- All 21 integration tests passed with no skips. They use real local Git repositories and separate processes, plus installer replacement/rollback and a redirected packaging fixture.
+- All 34 integration tests passed with no skips. They use real local Git repositories and separate processes, plus installer replacement/rollback and a redirected packaging fixture. Recovery fixtures cover unreadable index/HEAD, origin tracking and remote-default branches, all-file replacement, clone failure, registration rollback, in-place recovery, linked worktree refusal, destination collision, source substitution, external link ownership, retained staging errors and nested junctions.
 - The packaged native app passed preload/IPC and sandbox checks, populated project imports, onboarding, initial progress-track state, dropdown inset, keyboard dismissal and automated WCAG checks with zero reported violations.
 - The actual NSIS installer extracted, installed and updated the bundled app. The explicit per-user installation pass verified Windows Installed apps registration, Start menu shortcut and CLI PATH. Settings remained outside application replacement. The installed CLI read the isolated project registry.
 - The native installer welcome layout was checked for equal space above and below its complete content group. The owned SVG exports to transparent PNG and ICO.
+- The 0.2.1 recovery dialog passed keyboard toggle and automated WCAG checks. The deletion warning and final action remain visible at the 620 x 420 CSS viewport used for the minimum-size layout check. The installed CLI refuses an unreadable ordinary import and rejects an invalid recovery URL without changing the source. The per-user update preserved the owner's project registry byte for byte.
 - Production dependencies reported zero known vulnerabilities at verification time.
 - README and guide links resolve. Real app screenshots were inspected. The portable ZIP contains its app and CLI, passes archive integrity checks and excludes test/dev output.
 

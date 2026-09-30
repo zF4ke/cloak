@@ -27,6 +27,7 @@ flowchart LR
 | `src/core/service.ts`              | Scheduler and command dispatch shared by desktop/CLI.                                            |
 | `src/core/projects.ts`             | Registry, imports, links and Git mutation policy.                                                |
 | `src/core/git.ts`                  | Parsed branch, changes, remote and commit counts.                                                |
+| `src/core/recovery.ts`             | Verified fresh clones, folder swaps, owned-link rollback and displaced-copy cleanup.             |
 | `src/core/lock.ts`                 | Mutation coordination across app and CLI.                                                        |
 | `src/core/storage.ts`              | JSON registry writes through temporary file and rename.                                          |
 | `src/core/protection.ts`           | JSONC configuration and PowerShell bridge.                                                       |
@@ -37,6 +38,8 @@ flowchart LR
 ## Operation flow
 
 Setup collects a plan and validates resolved roots, OneDrive boundaries, repository identity and destination/link collisions. It moves, clones or creates the real folder, configures origin, creates a junction and writes the registry. Post-move failures keep the folder with a repairable warning.
+
+Explicit repository recovery first reads available origin/tracking configuration without depending on the damaged index or HEAD. After opt-in, it clones into a temporary directory under the real project root and verifies a committed branch. It checks that the source directory's identity has not changed, displaces the source, installs the clone, creates or reuses the link and writes the registry. Registration failure restores the original and removes only a link this operation created. Successful registration removes the displaced copy. Retained directories and failed rollback paths appear in the error or warning. See [repository recovery](adr/003-explicit-repository-recovery.md).
 
 An update takes the process lock and reloads the registry. It fetches origin, finds the tracking branch, compares commits and applies policy. HEAD and branch are checked again before replacement. Errors attach to the individual project. Sync optionally commits selected files, requires a clean tree, pulls and pushes.
 

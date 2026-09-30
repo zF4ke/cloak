@@ -329,6 +329,21 @@ try {
     true,
   );
   await screenshot(native, "recovery-review");
+  await native.call("Emulation.setDeviceMetricsOverride", {
+    width: 620,
+    height: 420,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await pause(250);
+  assert.equal(
+    await native.evaluate(
+      "(() => {const body=document.querySelector('.modal-content').getBoundingClientRect(),warning=document.querySelector('.review .notice').getBoundingClientRect(),footer=document.querySelector('.modal-footer').getBoundingClientRect();return warning.top>=body.top&&warning.bottom<=body.bottom&&footer.bottom<=innerHeight})()",
+    ),
+    true,
+  );
+  await screenshot(native, "recovery-review-small");
+  await native.call("Emulation.clearDeviceMetricsOverride", {});
   await native.evaluate(
     "document.querySelector('dialog button[aria-label=Close]').click()",
   );
@@ -453,6 +468,39 @@ try {
   );
   assert.match(output, /Reader/);
   assert.match(output, /Arcade/);
+  const packagedCli = (...args) =>
+    execFileSync(
+      join(installation, "app", "Cloak.exe"),
+      [join(installation, "app", "resources/app/dist/cli.cjs"), ...args],
+      {
+        encoding: "utf8",
+        windowsHide: true,
+        stdio: "pipe",
+        env: {
+          ...process.env,
+          ELECTRON_RUN_AS_NODE: "1",
+          CLOAK_DATA_DIR: profile,
+          CLOAK_SCRIPTS_DIR: join(installation, "app", "resources/app/scripts"),
+        },
+      },
+    );
+  assert.throws(
+    () => packagedCli("add", broken, "--confirm"),
+    (error) => /Use latest remote version/.test(String(error.stderr)),
+  );
+  assert.throws(
+    () =>
+      packagedCli(
+        "add",
+        broken,
+        "--confirm",
+        "--use-remote-version",
+        "--repository",
+        "invalid-url",
+      ),
+    (error) => /Use a GitHub repository URL/.test(String(error.stderr)),
+  );
+  assert.equal(await readFile(join(broken, ".git", "index"), "utf8"), "");
   if (installLocal) {
     const registration = JSON.parse(
       execFileSync(
