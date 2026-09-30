@@ -1,5 +1,7 @@
 # Release verification
 
+The 0.2.3 shortcut change was reviewed on 1 October 2026 against `a175f39` and [issue 3](https://github.com/zF4ke/cloak/issues/3). Standards and specification reviews are both clear after fixing legacy junction detection to inspect filesystem metadata. A regression covers a legal project name ending in `.lnk`; migration removes its junction, creates the shortcut and preserves its repository. The five owner shortcuts were created through the shared CLI and their actual Windows Shell targets were checked. Ada remained clean while OneDrive was running.
+
 Reviewed on 30 September 2026 against `08b1591` and the accepted [desktop specification](specs/desktop-project-manager.md).
 
 The 0.2.1 recovery change was also reviewed against `d8adbec` and [issue 1](https://github.com/zF4ke/cloak/issues/1). Both review axes reported no remaining material findings after the fixes below.
@@ -21,6 +23,9 @@ Recovery review fixed source substitution during cloning, rollback ownership of 
 
 ## Completed checks
 
+- All 61 integration tests passed with no skips for 0.2.3. New cases exercise real Windows Shell shortcuts, imports, clone/new setup, Unicode and shell punctuation, deletion independence, foreign-target collisions, legacy junction conversion, names ending in `.lnk`, and existing recovery rollback protections.
+- The 0.2.3 packaged app passed native import and shortcut-target checks, settings and recovery UI inspection, automated accessibility, the actual per-user NSIS update, registration and CLI PATH. The installed CLI recreated a deleted fixture shortcut. The smoke harness waits for the loaded project screen after a reload rather than assuming a fixed delay. The portable ZIP passed its integrity check and includes the shortcut helper.
+
 - TypeScript check and production build passed.
 - All 55 integration tests passed with no skips for 0.2.2. New fixtures cover real Windows directory locks, explicit termination, protected processes, process exits during close, mismatched start times, substituted folders, abandoned clones, interrupted installation, altered originals and deletion retries. A disconnected isolated Cloud Files sync root exercises the UNKNOWN move path. Provider readiness is simulated by unregistering that test root, then the actual native move preserves its folder identity and local content. Concurrent watcher upgrades create one replacement and preserve configuration and running intent. Live Ada was inspected for locks but not moved or unlocked.
 - All 34 integration tests passed with no skips for 0.2.1. They use real local Git repositories and separate processes, plus installer replacement/rollback and a redirected packaging fixture. Recovery fixtures cover unreadable index/HEAD, origin tracking and remote-default branches, all-file replacement, clone failure, registration rollback, in-place recovery, linked worktree refusal, destination collision, source substitution, external link ownership, retained staging errors and nested junctions.
@@ -33,6 +38,6 @@ Recovery review fixed source substitution during cloning, rollback ownership of 
 
 ## Limits
 
-Automated Git operations used local remotes. They did not create a new live GitHub test repository or migrate the owner's projects. OneDrive behavior varies by client version; the [junction decision](adr/002-folder-links.md) records Microsoft's support limitation. External editors are not locked during Git updates, so the chosen discard policy can lose concurrent edits. Binaries are unsigned.
+Automated Git operations used local remotes. They did not create a new live GitHub test repository or migrate the owner's projects. Managed projects now use ordinary shortcut files rather than exposing repositories through OneDrive junctions. Each PC needs its own local target, as recorded in the [shortcut decision](adr/004-project-shortcuts.md). The original manual junction tool remains separate and does not guarantee isolation. External editors are not locked during Git updates, so the chosen discard policy can lose concurrent edits. Binaries are unsigned.
 
 Automated accessibility checks cover specific rendered states, not a complete accessibility certification. Broader taste and usability remain matters for real use. The original protection daemon was preserved and its configuration/command bridge checked, but this release did not perform a live OneDrive pause/resume endurance test.

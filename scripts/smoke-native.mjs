@@ -204,7 +204,22 @@ try {
     assert.equal(shortcut.arguments, "");
   }
   await native.call("Page.reload", {});
-  await pause(1500);
+  for (
+    let i = 0;
+    i < 150 &&
+    !(await native.evaluate(
+      "Boolean(document.querySelector('.action-tile.purple'))",
+    ));
+    i++
+  )
+    await pause(100);
+  assert.equal(
+    await native.evaluate(
+      "Boolean(document.querySelector('.action-tile.purple'))",
+    ),
+    true,
+    await native.evaluate("document.body.innerText"),
+  );
   await screenshot(native, "projects");
   await native.evaluate(
     "document.querySelector('.action-tile.purple').click()",
