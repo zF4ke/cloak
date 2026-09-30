@@ -4,6 +4,8 @@ Reviewed on 30 September 2026 against `08b1591` and the accepted [desktop specif
 
 The 0.2.1 recovery change was also reviewed against `d8adbec` and [issue 1](https://github.com/zF4ke/cloak/issues/1). Both review axes reported no remaining material findings after the fixes below.
 
+The 0.2.2 unlock and cleanup change was reviewed against `f29322e` and [issue 2](https://github.com/zF4ke/cloak/issues/2). Standards and specification reviews both reported no remaining material findings. Fixes pin process handles before validating start time, tolerate exited or inaccessible holders, verify original and clone identities before cleanup, preserve retry records after failed deletion and keep cleanup failures from blocking scheduled Git checks.
+
 ## Code review
 
 Independent reviews checked repository standards and the feature specification. Both final passes reported no remaining material findings.
@@ -18,6 +20,7 @@ Recovery review fixed source substitution during cloning, rollback ownership of 
 ## Completed checks
 
 - TypeScript check and production build passed.
+- All 51 integration tests passed with no skips for 0.2.2. New fixtures cover real Windows directory locks, explicit termination, protected processes, process exits during close, mismatched start times, substituted folders, abandoned clones, interrupted installation, altered originals and deletion retries. Live Ada was inspected for locks but not moved or unlocked.
 - All 34 integration tests passed with no skips. They use real local Git repositories and separate processes, plus installer replacement/rollback and a redirected packaging fixture. Recovery fixtures cover unreadable index/HEAD, origin tracking and remote-default branches, all-file replacement, clone failure, registration rollback, in-place recovery, linked worktree refusal, destination collision, source substitution, external link ownership, retained staging errors and nested junctions.
 - The packaged native app passed preload/IPC and sandbox checks, populated project imports, onboarding, initial progress-track state, dropdown inset, keyboard dismissal and automated WCAG checks with zero reported violations.
 - The actual NSIS installer extracted, installed and updated the bundled app. The explicit per-user installation pass verified Windows Installed apps registration, Start menu shortcut and CLI PATH. Settings remained outside application replacement. The installed CLI read the isolated project registry.

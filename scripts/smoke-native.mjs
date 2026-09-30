@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as pause } from "node:timers/promises";
 import assert from "node:assert/strict";
+import { once } from "node:events";
 
 // Test the packaged Electron app, its sandboxed preload and real installer.
 // This is native-app integration, not browser-preview automation.
@@ -105,6 +106,7 @@ async function connect(executable, args = [], setup = false) {
 }
 function stop() {
   for (const child of processes.splice(0)) {
+    if (child.exitCode !== null) continue;
     try {
       execFileSync("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], {
         windowsHide: true,
@@ -329,6 +331,27 @@ try {
     true,
   );
   await screenshot(native, "recovery-review");
+  assert.equal(
+    await native.evaluate(
+      "getComputedStyle(document.querySelector('.step.current > span:first-child')).boxShadow",
+    ),
+    "none",
+  );
+  assert.equal(
+    await native.evaluate(
+      "(() => { const track=document.querySelector('.step-track').getBoundingClientRect(), fill=document.querySelector('.step-track > div').getBoundingClientRect(), end=document.querySelector('.step.current > span:first-child').getBoundingClientRect(); return Math.abs(fill.right-track.right)<1 && fill.right>=end.left; })()",
+    ),
+    true,
+  );
+  const locks = await native.evaluate(
+    `window.cloak.folderLocks(${JSON.stringify(broken)})`,
+  );
+  assert.equal(typeof locks.available, "boolean");
+  assert.equal(Array.isArray(locks.apps), true);
+  await assert.rejects(
+    native.evaluate("window.cloak.closeFolderLocks('invalid',true)"),
+    /Check locking apps again/,
+  );
   await native.call("Emulation.setDeviceMetricsOverride", {
     width: 620,
     height: 420,
@@ -348,6 +371,158 @@ try {
     "document.querySelector('dialog button[aria-label=Close]').click()",
   );
   await pause(400);
+  // A real isolated directory lock drives the complete unlock UI and native IPC.
+  const locked = join(directory, "incoming", "Locked");
+  execFileSync("git", ["clone", join(directory, "Reader.git"), locked], {
+    windowsHide: true,
+    stdio: "pipe",
+  });
+  const locker = spawn(
+    process.execPath,
+    ["-e", "process.stdout.write('ready\\n');process.stdin.resume()"],
+    { cwd: locked, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] },
+  );
+  processes.push(locker);
+  await once(locker.stdout, "data");
+  await native.evaluate("document.querySelector('.action-tile.blue').click()");
+  await pause(300);
+  await native.call("Input.insertText", { text: locked });
+  await native.evaluate(
+    "document.querySelector('dialog .button.primary').click()",
+  );
+  for (
+    let i = 0;
+    i < 60 &&
+    !(await native.evaluate(
+      "document.querySelector('dialog').innerText.includes('Use this repository')",
+    ));
+    i++
+  )
+    await pause(100);
+  await native.evaluate(
+    "document.querySelector('dialog .button.primary').click()",
+  );
+  await pause(350);
+  await native.evaluate(
+    "document.querySelector('dialog .button.primary').click()",
+  );
+  for (
+    let i = 0;
+    i < 60 &&
+    !(await native.evaluate(
+      "Boolean(document.querySelector('.folder-unlock'))",
+    ));
+    i++
+  )
+    await pause(100);
+  assert.match(
+    await native.evaluate("document.querySelector('dialog').innerText"),
+    /folder is open/,
+  );
+  await native.evaluate(
+    "document.querySelector('.folder-unlock .button').click()",
+  );
+  for (
+    let i = 0;
+    i < 100 &&
+    !(await native.evaluate(
+      "Boolean(document.querySelector('.locking-apps')) || [...document.querySelectorAll('.folder-unlock button')].some(b=>b.textContent.trim()==='Get PowerToys')",
+    ));
+    i++
+  )
+    await pause(100);
+  if (locks.available) {
+    assert.match(
+      await native.evaluate(
+        "document.querySelector('.locking-apps').innerText",
+      ),
+      /node/,
+    );
+    assert.equal(
+      await native.evaluate(
+        "[...document.querySelectorAll('.folder-unlock button')].some(b=>b.textContent.trim()==='End tasks')",
+      ),
+      false,
+    );
+    await screenshot(native, "unlock-folder");
+    assert.equal(
+      await native.evaluate(
+        "(() => { const body=document.querySelector('.modal-content').getBoundingClientRect(),panel=document.querySelector('.folder-unlock').getBoundingClientRect();return panel.top>=body.top&&panel.bottom<=body.bottom })()",
+      ),
+      true,
+    );
+    await native.evaluate(
+      "[...document.querySelectorAll('.folder-unlock button')].find(b=>b.textContent.trim()==='End locking tasks').click()",
+    );
+    await pause(350);
+    await native.evaluate(
+      "document.querySelector('.folder-unlock').scrollIntoView({block:'nearest'})",
+    );
+    assert.equal(
+      await native.evaluate(
+        "document.querySelector('.folder-unlock .button.danger').disabled",
+      ),
+      true,
+    );
+    await native.evaluate(
+      "document.querySelector('.folder-unlock [role=switch]').click()",
+    );
+    assert.equal(
+      await native.evaluate(
+        "document.querySelector('.folder-unlock .button.danger').disabled",
+      ),
+      false,
+    );
+    assert.deepEqual(
+      await native.evaluate(
+        "axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}).then(r=>r.violations.map(v=>v.id))",
+      ),
+      [],
+    );
+    await screenshot(native, "unlock-confirm");
+    await native.evaluate(
+      "document.querySelector('.folder-unlock .button.danger').click()",
+    );
+    for (
+      let i = 0;
+      i < 100 &&
+      !(await native.evaluate(
+        "document.querySelector('.folder-unlock').innerText.includes('No locking apps found')",
+      ));
+      i++
+    )
+      await pause(100);
+    assert.match(
+      await native.evaluate(
+        "document.querySelector('.folder-unlock').innerText",
+      ),
+      /No locking apps found/,
+    );
+  } else {
+    assert.match(
+      await native.evaluate(
+        "document.querySelector('.folder-unlock').innerText",
+      ),
+      /Get PowerToys/,
+    );
+    const exited = once(locker, "exit");
+    locker.kill();
+    await exited;
+  }
+  await native.evaluate(
+    "document.querySelector('dialog .button.primary').click()",
+  );
+  for (
+    let i = 0;
+    i < 60 &&
+    (await native.evaluate("Boolean(document.querySelector('dialog[open]'))"));
+    i++
+  )
+    await pause(100);
+  assert.equal(
+    await native.evaluate("Boolean(document.querySelector('dialog[open]'))"),
+    false,
+  );
   await native.evaluate(
     "document.querySelector('nav button[aria-label=Settings]').click()",
   );
@@ -484,6 +659,7 @@ try {
         },
       },
     );
+  assert.match(packagedCli("cleanup"), /Recovery cleanup complete/);
   assert.throws(
     () => packagedCli("add", broken, "--confirm"),
     (error) => /Use latest remote version/.test(String(error.stderr)),

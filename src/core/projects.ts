@@ -11,9 +11,16 @@ import { basename, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { JsonStore } from "./storage.ts";
 import { withProjectLock } from "./lock.ts";
-import { exists, inside, projectName, resolvedPath } from "./paths.ts";
+import {
+  exists,
+  inside,
+  projectName,
+  resolvedPath,
+  moveProjectFolder,
+} from "./paths.ts";
 import { gitState, githubUrl } from "./git.ts";
 import { replaceFromRemote } from "./recovery.ts";
+import { cleanupRecoveries } from "./recovery-cleanup.ts";
 import type { Run } from "./commands.ts";
 import type {
   Inspection,
@@ -32,6 +39,7 @@ export class Projects {
   private state!: State;
   private writes = Promise.resolve();
   private updates = new Map<string, { checkedAt: string; message?: string }>();
+  recoveryWarnings: string[] = [];
   private store: JsonStore<State>;
   constructor(
     private directory: string,
@@ -71,6 +79,19 @@ export class Projects {
   }
   settings() {
     return structuredClone(this.state.settings);
+  }
+  async cleanupRecoveries() {
+    return this.serial(async () => {
+      await this.validateSettings(this.state.settings);
+      this.recoveryWarnings = await cleanupRecoveries(
+        this.state.settings.projectsFolder,
+        this.state.projects.map((p) => p.path),
+      );
+    }).catch((error) => {
+      this.recoveryWarnings = [
+        `Recovery cleanup pending: ${error instanceof Error ? error.message : String(error)}`,
+      ];
+    });
   }
   async saveSettings(settings: Settings) {
     return this.serial(async () => {
@@ -399,7 +420,7 @@ export class Projects {
       await mkdir(root, { recursive: true });
       if (inspection && resolve(inspection.path) !== resolve(target)) {
         try {
-          await rename(inspection.path, target);
+          await moveProjectFolder(inspection.path, target);
         } catch (error) {
           throw new Error(
             `Could not move the folder. Close terminals or apps using it, and use a destination on the same drive. Original folder: ${inspection.path}. ${error instanceof Error ? error.message : ""}`,

@@ -53,6 +53,7 @@ for (const script of [
   "install.ps1",
   "probe.ps1",
   "desktop-control.ps1",
+  "folder-locks.ps1",
   "config.jsonc",
   "scripts/register-cli.ps1",
   "scripts/register-installation.ps1",

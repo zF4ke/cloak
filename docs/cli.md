@@ -8,17 +8,19 @@ cloak new "My project" --confirm
 cloak add "C:\Users\you\OneDrive\Projects\my-project" --confirm
 cloak clone https://github.com/you/my-project --confirm
 cloak check
+cloak cleanup
 cloak sync "My project"
 ```
 
-| Command                  | Behavior                                                              |
-| ------------------------ | --------------------------------------------------------------------- |
-| `projects`               | Names, real paths, branches and change counts.                        |
-| `new <name> --confirm`   | Create local Git folder, private GitHub repository and optional link. |
-| `add <folder> --confirm` | Import whole folder and reuse origin or create a repository.          |
-| `clone <url> --confirm`  | Clone a GitHub repository into local storage.                         |
-| `check`                  | Fetch all projects and apply the configured update policy.            |
-| `sync <name>`            | Pull and push a clean, committed project. Does not commit files.      |
+| Command                  | Behavior                                                                     |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| `projects`               | Names, real paths, branches and change counts.                               |
+| `new <name> --confirm`   | Create local Git folder, private GitHub repository and optional link.        |
+| `add <folder> --confirm` | Import whole folder and reuse origin or create a repository.                 |
+| `clone <url> --confirm`  | Clone a GitHub repository into local storage.                                |
+| `check`                  | Fetch all projects and apply the configured update policy.                   |
+| `sync <name>`            | Pull and push a clean, committed project. Does not commit files.             |
+| `cleanup`                | Remove disposable recovery folders and report originals needing restoration. |
 
 Use `--public` on new/add to create a public repository. `--confirm` authorizes setup, folder move/link and needed repository creation. Quote paths with spaces. Set roots and update preferences in desktop Settings. Check can discard edits on a behind branch under the default policy. Read [Projects](projects.md#updates-and-sync).
 

@@ -1,4 +1,4 @@
-import { lstat, realpath } from "node:fs/promises";
+import { lstat, realpath, rename } from "node:fs/promises";
 import {
   basename,
   dirname,
@@ -47,3 +47,19 @@ export const exists = (path: string) =>
       throw error;
     },
   );
+export async function moveProjectFolder(source: string, target: string) {
+  try {
+    await rename(source, target);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EBUSY")
+      throw new Error(
+        "The folder is open in another app. Close editors, terminals and coding-agent sessions, then retry.",
+      );
+    if (code === "EPERM" || code === "EACCES")
+      throw new Error(
+        "Windows blocked moving this folder. Close apps using it and check folder permissions, then retry.",
+      );
+    throw error;
+  }
+}

@@ -40,6 +40,7 @@ Use Sync to publish work. Select changed files and write a commit message. Other
 - Use the same project engine from the [CLI](docs/cli.md).
 - Keep the original [OneDrive protection](docs/protection.md), log and temporary junction controls.
 - Install updates without replacing settings or the project list.
+- Find and close apps blocking imports with optional PowerToys integration. Clean abandoned recovery clones automatically. See [recovery](docs/projects.md#recovery).
 
 Microsoft does not support syncing symlinks or junctions with OneDrive. Cloak uses junctions at the owner's request and cannot guarantee that every OneDrive version ignores linked contents. Each PC needs its own clone and link. Read [the folder-link decision](docs/adr/002-folder-links.md).
 

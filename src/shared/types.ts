@@ -49,6 +49,7 @@ export type ProtectionState = {
   legacy: { path: string; scratch: string }[];
 };
 export type Snapshot = {
+  recoveryWarnings?: string[];
   settings: Settings;
   projects: ProjectView[];
   github: { available: boolean; login?: string; error?: string };
@@ -76,6 +77,9 @@ export type Inspection = {
   recovery?: { error: string; remote?: string; branch?: string };
 };
 export type CloakApi = {
+  folderLocks(path: string): Promise<FolderLocks>;
+  closeFolderLocks(token: string, force: boolean): Promise<FolderLocks>;
+  openUnlockHelp(): Promise<void>;
   snapshot(): Promise<Snapshot>;
   inspect(path: string): Promise<Inspection>;
   create(
@@ -111,6 +115,19 @@ export type CloakApi = {
   openProject(id: string): Promise<void>;
   openRepository(id: string): Promise<void>;
   chooseFolder(): Promise<string | undefined>;
+};
+export type LockingApp = {
+  pid: number;
+  name: string;
+  started: string;
+  protected: boolean;
+  canClose: boolean;
+};
+export type FolderLocks = {
+  available: boolean;
+  token?: string;
+  apps: LockingApp[];
+  message?: string;
 };
 declare global {
   interface Window {

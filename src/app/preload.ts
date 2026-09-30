@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
 const methods = [
+  "folderLocks",
+  "closeFolderLocks",
+  "openUnlockHelp",
   "snapshot",
   "inspect",
   "create",

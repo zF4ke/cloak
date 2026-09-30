@@ -909,7 +909,6 @@ select {
   background: #21192e;
   border-color: #8f73cc;
   color: #c9b1ff;
-  box-shadow: 0 0 0 4px #101010;
 }
 .step.complete > span:first-child {
   color: var(--accent);
@@ -930,6 +929,27 @@ select {
 }
 .setup-step {
   min-height: 0;
+}
+.folder-unlock {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+.folder-unlock > .button {
+  justify-self: start;
+}
+.locking-apps {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.locking-apps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-wrap: anywhere;
 }
 .setup-step > .field:last-child {
   margin-bottom: 0;

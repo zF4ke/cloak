@@ -14,6 +14,8 @@ import {
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { Projects } from "../src/core/projects.ts";
 import { gitState } from "../src/core/git.ts";
 import { run, type Run } from "../src/core/commands.ts";
@@ -926,7 +928,7 @@ test("failed clone reports retained staging when cleanup refuses a redirected fo
         const fresh = args.at(-1)!;
         const staging = dirname(fresh);
         retained = `${staging}.held`;
-        await mkdir(fresh);
+        await mkdir(fresh, { recursive: true });
         await writeFile(join(fresh, "sentinel"), "retained partial clone");
         await rename(staging, retained);
         await symlink(
@@ -989,3 +991,47 @@ test("discarding the displaced folder does not traverse its nested directory lin
     await f.close();
   }
 });
+
+test(
+  "busy source recovery explains that coding-agent sessions must close and leaves the source intact",
+  { skip: process.platform !== "win32" },
+  async () => {
+    const f = await recoveryFixture();
+    let locker: ReturnType<typeof spawn> | undefined;
+    try {
+      await writeFile(join(f.source, ".git", "index"), "");
+      await writeFile(join(f.source, ".env"), "keep while locked");
+      locker = spawn(
+        process.execPath,
+        [
+          "-e",
+          "process.stdout.write('ready\\n'); process.stdin.resume(); process.stdin.on('data', () => process.exit(0));",
+        ],
+        {
+          cwd: f.source,
+          windowsHide: true,
+          stdio: ["pipe", "pipe", "pipe"],
+        },
+      );
+      await once(locker.stdout!, "data");
+      await assert.rejects(
+        f.recover(),
+        /Original folder unchanged.*folder is open.*coding-agent sessions.*retry/,
+      );
+      assert.equal(
+        await readFile(join(f.source, ".env"), "utf8"),
+        "keep while locked",
+      );
+      assert.equal(await readFile(join(f.source, ".git", "index"), "utf8"), "");
+      assert.deepEqual(await readdir(f.local), []);
+      assert.deepEqual(await f.projects.views(), []);
+    } finally {
+      if (locker && locker.exitCode === null) {
+        const exited = once(locker, "exit");
+        locker.stdin!.write("quit\n");
+        await exited;
+      }
+      await f.close();
+    }
+  },
+);

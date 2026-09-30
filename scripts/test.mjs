@@ -6,6 +6,8 @@ await build({
     "tests/install.test.ts",
     "tests/lock.test.ts",
     "tests/package.test.ts",
+    "tests/recovery-cleanup.test.ts",
+    "tests/folder-locks.test.ts",
   ],
   outdir: "dist/tests",
   outExtension: { ".js": ".cjs" },
@@ -23,6 +25,8 @@ const result = spawnSync(
     "dist/tests/install.test.cjs",
     "dist/tests/lock.test.cjs",
     "dist/tests/package.test.cjs",
+    "dist/tests/recovery-cleanup.test.cjs",
+    "dist/tests/folder-locks.test.cjs",
   ],
   { stdio: "inherit", windowsHide: true },
 );

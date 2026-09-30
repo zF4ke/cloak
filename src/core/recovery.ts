@@ -1,8 +1,17 @@
-import { lstat, mkdir, mkdtemp, realpath, rename, rm } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  realpath,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { join, resolve } from "node:path";
 import type { Run } from "./commands.ts";
 import { gitState } from "./git.ts";
-import { exists, inside } from "./paths.ts";
+import { exists, inside, moveProjectFolder } from "./paths.ts";
+import { removeRecoveryStage, type RecoveryRecord } from "./recovery-record.ts";
 
 type Recovery = {
   source: string;
@@ -38,6 +47,18 @@ export async function replaceFromRemote<T extends { warning?: string }>(
   if (plan.branch)
     await run("git", ["check-ref-format", "--branch", plan.branch]);
   const staging = await mkdtemp(join(root, ".cloak-recovery-"));
+  const stagingIdentity = await lstat(staging, { bigint: true });
+  const journal: RecoveryRecord = {
+    version: 1,
+    pid: process.pid,
+    target: plan.target,
+    dev: String(stagingIdentity.dev),
+    ino: String(stagingIdentity.ino),
+    freshDev: "",
+    freshIno: "",
+    oldDev: String(sourceStat.dev),
+    oldIno: String(sourceStat.ino),
+  };
   const fresh = join(staging, "fresh"),
     old = join(staging, "old");
   const message = (error: unknown) =>
@@ -51,7 +72,7 @@ export async function replaceFromRemote<T extends { warning?: string }>(
       resolve(await realpath(root)) !== resolve(root)
     )
       throw new Error("Recovery staging folder changed. It was not deleted.");
-    await rm(staging, { recursive: true });
+    await removeRecoveryStage(staging, journal);
   }
   async function cleanupMessage() {
     try {
@@ -63,6 +84,11 @@ export async function replaceFromRemote<T extends { warning?: string }>(
   }
   // Nothing in the source changes until clone and checkout both succeed.
   try {
+    await mkdir(fresh);
+    freshIdentity = await lstat(fresh, { bigint: true });
+    journal.freshDev = String(freshIdentity.dev);
+    journal.freshIno = String(freshIdentity.ino);
+    await writeFile(join(staging, "recovery.json"), JSON.stringify(journal));
     await run(
       "git",
       [
@@ -79,7 +105,15 @@ export async function replaceFromRemote<T extends { warning?: string }>(
       throw new Error(
         "The remote has no usable committed branch. Choose a branch before recovery.",
       );
-    freshIdentity = await lstat(fresh, { bigint: true });
+    const cloned = await lstat(fresh, { bigint: true });
+    if (
+      cloned.dev !== freshIdentity.dev ||
+      cloned.ino !== freshIdentity.ino ||
+      cloned.isSymbolicLink()
+    )
+      throw new Error(
+        "The temporary clone folder changed. Inspect it before recovery.",
+      );
     await verifySource();
     const currentSource = await lstat(plan.source, { bigint: true });
     if (
@@ -94,7 +128,7 @@ export async function replaceFromRemote<T extends { warning?: string }>(
       (await exists(plan.target))
     )
       throw new Error(`The destination already exists: ${plan.target}`);
-    await rename(plan.source, old);
+    await moveProjectFolder(plan.source, old);
   } catch (error) {
     const retained = await cleanupMessage();
     throw new Error(`Original folder unchanged. ${message(error)}${retained}`);

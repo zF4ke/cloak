@@ -12,7 +12,7 @@ Choose Quit in the tray menu, then run the new installer. Setup copies files to 
 
 ## Portable build
 
-Extract `Cloak-0.2.0-win-x64.zip` outside OneDrive and open `Cloak.exe`. The included `cloak.cmd` runs its bundled CLI. This creates no Start menu or uninstall entry. It uses the same per-user registry as the installed app. Run only one copy at a time.
+Extract the release's `Cloak-<version>-win-x64.zip` outside OneDrive and open `Cloak.exe`. The included `cloak.cmd` runs its bundled CLI. This creates no Start menu or uninstall entry. It uses the same per-user registry as the installed app. Run only one copy at a time.
 
 ## Uninstall
 

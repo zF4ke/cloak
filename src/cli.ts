@@ -62,6 +62,13 @@ async function main() {
         );
       if (!views.length)
         console.log("No managed projects. Use cloak new, add or clone.");
+    } else if (command === "cleanup") {
+      await service.projects.cleanupRecoveries();
+      if (service.projects.recoveryWarnings.length) {
+        for (const warning of service.projects.recoveryWarnings)
+          console.error(warning);
+        process.exitCode = 1;
+      } else console.log("Recovery cleanup complete.");
     } else if (command === "check") {
       await service.projects.checkUpdates(true);
       const views = await service.projects.views();
@@ -146,7 +153,7 @@ async function main() {
       if (result.warning) console.error(result.warning);
     } else
       throw new Error(
-        "Commands: projects, new, add, clone, sync, check. The original OneDrive commands remain in cloak.ps1.",
+        "Commands: projects, new, add, clone, sync, check, cleanup. The original OneDrive commands remain in cloak.ps1.",
       );
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

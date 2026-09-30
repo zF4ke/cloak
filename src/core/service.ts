@@ -2,12 +2,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { Projects } from "./projects.ts";
 import { Protection } from "./protection.ts";
+import { FolderUnlocker } from "./folder-locks.ts";
 import { run as execute, type Run } from "./commands.ts";
 import type { CloakApi, Snapshot, Settings } from "../shared/types.ts";
 
 export class Service {
   readonly projects: Projects;
   readonly protection: Protection;
+  readonly unlocker: FolderUnlocker;
   private timer?: ReturnType<typeof setInterval>;
   private checking?: Promise<void>;
   constructor(
@@ -42,10 +44,12 @@ export class Service {
       behindEdits: "discard",
     };
     this.projects = new Projects(directory, defaults, cloud, run);
+    this.unlocker = new FolderUnlocker(scripts, run);
     this.protection = new Protection(scripts, directory, run, desktop);
   }
   async initialize() {
     await this.projects.initialize();
+    if (this.desktop) await this.projects.cleanupRecoveries();
     // Reuse an existing configured Projects folder for links on first setup.
     const settings = this.projects.settings();
     const config = await this.protection.config();
@@ -65,15 +69,22 @@ export class Service {
   }
   private check() {
     if (!this.checking)
-      this.checking = this.projects.checkUpdates().finally(() => {
-        this.checking = undefined;
-      });
+      this.checking = this.projects
+        .cleanupRecoveries()
+        .then(() =>
+          this.projects.settings().autoPull
+            ? this.projects.checkUpdates()
+            : undefined,
+        )
+        .finally(() => {
+          this.checking = undefined;
+        });
     return this.checking;
   }
   private schedule() {
     if (this.timer) clearInterval(this.timer);
     const settings = this.projects.settings();
-    if (this.desktop && settings.autoPull) {
+    if (this.desktop) {
       void this.check().catch(() => {});
       this.timer = setInterval(() => {
         void this.check().catch(() => {});
@@ -116,6 +127,7 @@ export class Service {
         ),
       ]);
     return {
+      recoveryWarnings: [...this.projects.recoveryWarnings],
       settings: this.projects.settings(),
       projects,
       protection,
@@ -127,6 +139,14 @@ export class Service {
   }
   async call(method: keyof CloakApi, args: unknown[]): Promise<unknown> {
     switch (method) {
+      case "folderLocks":
+        return this.unlocker.inspect(args[0] as string);
+      case "closeFolderLocks":
+        return this.unlocker.close(args[0] as string, args[1] as boolean);
+      case "openUnlockHelp":
+        return this.hooks.openUrl?.(
+          "https://learn.microsoft.com/en-us/windows/powertoys/install",
+        );
       case "snapshot":
         return this.snapshot();
       case "inspect":

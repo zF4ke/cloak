@@ -93,6 +93,9 @@ function App() {
         <main className="main">
           <div className="page-scroll">
             {error && <Notice>{error}</Notice>}
+            {snapshot?.recoveryWarnings?.map((warning) => (
+              <Notice key={warning}>{warning}</Notice>
+            ))}
             {!snapshot ? (
               <div className="app-loading" role="status">
                 <Icon icon={LoaderCircle} className="spin" />

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   ArrowLeft,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { Inspection, ProjectPlan, Snapshot } from "../shared/types.ts";
 import { api, message } from "./api.ts";
+import { FolderUnlock } from "./folder-unlock.tsx";
 import {
   Button,
   Disclosure,
@@ -42,6 +43,11 @@ export function Onboarding({
     [error, setError] = useState("");
   const [recover, setRecover] = useState(false),
     [branch, setBranch] = useState("");
+  const [unlockBusy, setUnlockBusy] = useState(false);
+  const errorRegion = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) errorRegion.current?.scrollIntoView({ block: "nearest" });
+  }, [error]);
   const reduced = useReducedMotion();
   const existing = Boolean(inspection?.git?.remote),
     title =
@@ -122,13 +128,13 @@ export function Onboarding({
     <Modal
       title={title}
       onClose={() => {
-        if (!busy) onClose();
+        if (!busy && !unlockBusy) onClose();
       }}
       footer={
         <>
           <Button
             icon={ArrowLeft}
-            disabled={busy}
+            disabled={busy || unlockBusy}
             onClick={() => (step ? setStep(step - 1) : onClose())}
           >
             {step ? "Back" : "Cancel"}
@@ -138,6 +144,7 @@ export function Onboarding({
             icon={step === 2 ? Check : ArrowRight}
             busy={busy}
             disabled={
+              unlockBusy ||
               !snapshot.gitAvailable ||
               (step === 0 && Boolean(inspection?.recovery) && !recover) ||
               (step === 2 &&
@@ -445,7 +452,23 @@ export function Onboarding({
       {!snapshot.gitAvailable && (
         <Notice>Install Git before setting up a project.</Notice>
       )}
-      {error && <Notice>{error}</Notice>}
+      {error && (
+        <div ref={errorRegion}>
+          <Notice>{error}</Notice>
+          {/folder is open|Windows blocked moving|\b(?:EBUSY|EPERM|EACCES)\b/.test(
+            error,
+          ) &&
+            step === 2 &&
+            mode === "import" &&
+            inspection && (
+              <FolderUnlock
+                key={inspection.path}
+                path={inspection.path}
+                onBusy={setUnlockBusy}
+              />
+            )}
+        </div>
+      )}
     </Modal>
   );
 }

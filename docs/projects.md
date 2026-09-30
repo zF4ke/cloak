@@ -56,7 +56,19 @@ This recovery replaces the entire local copy with committed remote content. It d
 
 Cloak clones and verifies the remote outside OneDrive before moving the old folder. A failed clone leaves the original in place. A failed registration restores it. Successful recovery removes the displaced copy and creates the configured folder link. If a process or OneDrive prevents a move, close it and retry. If cleanup fails, the warning gives the retained folder path. Linked worktrees require manual Git repair. A healthy repository cannot use this recovery mode.
 
-If the app or PC stops during replacement, do not delete `.cloak-recovery-*` folders in the real project root. `old` contains the displaced copy until registration succeeds. Inspect the managed project and these folders before restoring or removing them.
+### Locked folders
+
+After a failed import, choose **Unlock folder**. Cloak uses [Microsoft PowerToys File Locksmith](https://learn.microsoft.com/en-us/windows/powertoys/file-locksmith) to list apps holding the folder or its files. If PowerToys is absent, **Get PowerToys** opens Microsoft's installation guide. You can also close the apps yourself and retry; PowerToys is optional.
+
+**Close apps** requests a normal window close. Background tasks without a window may require quitting their parent editor or terminal. **End locking tasks** is a separate disclosure. Enable **Discard unsaved work**, then choose **End tasks** to terminate the listed tasks. This can stop active coding agents and lose unsaved work. Cloak rechecks the folder, current holders and process start times before acting. It protects its own process, launching processes and Windows services. It does not forcibly close arbitrary file handles or automatically retry replacement.
+
+Some processes cannot be inspected by your Windows account. An empty list means no visible holders were found, not proof that Windows has released every lock. For a coding-agent session whose workspace is the source folder, fully quit the parent app before recovery.
+
+### Temporary recovery files
+
+Cloak removes temporary clones immediately after a failed attempt and removes displaced originals after successful registration. It records each new staging folder in `recovery.json`. If deletion fails or the app stops, it retries cleanup at desktop startup and every configured interval, even with automatic Git updates disabled. Run `cloak cleanup` for an immediate cleanup from the CLI.
+
+Cleanup removes abandoned disposable clones. It removes a displaced original only when the registry identifies the verified replacement folder. If replacement was interrupted before registration, it retains `old`, removes the extra clone and reports the original's path. Restore those original files manually. Unknown, altered or currently active recovery folders are not automatically deleted. Older staging folders without a recovery record require manual inspection.
 
 | Problem                        | Action                                                                                                       |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------ |

@@ -1,5 +1,8 @@
 import type { CloakApi } from "../shared/types.ts";
 const methods: (keyof CloakApi)[] = [
+  "folderLocks",
+  "closeFolderLocks",
+  "openUnlockHelp",
   "snapshot",
   "inspect",
   "create",
