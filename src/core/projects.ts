@@ -13,6 +13,7 @@ import { JsonStore } from "./storage.ts";
 import { withProjectLock } from "./lock.ts";
 import { exists, inside, projectName, resolvedPath } from "./paths.ts";
 import { gitState, githubUrl } from "./git.ts";
+import { replaceFromRemote } from "./recovery.ts";
 import type { Run } from "./commands.ts";
 import type {
   Inspection,
@@ -107,23 +108,64 @@ export class Projects {
     const actual = await realpath(path);
     const stat = await lstat(actual);
     if (!stat.isDirectory()) throw new Error("Choose a project folder.");
-    let git: Inspection["git"];
+    let git: Inspection["git"], recovery: Inspection["recovery"];
     const top = await this.run("git", [
       "-C",
       actual,
       "rev-parse",
       "--show-toplevel",
     ]).catch(() => undefined);
-    if (!top && (await exists(join(actual, ".git"))))
-      throw new Error(
-        "Git cannot read this repository. Repair its .git folder before importing it.",
-      );
+    const hasGit = await exists(join(actual, ".git"));
+    if (!top && hasGit)
+      recovery = { error: "Git cannot read this repository's metadata." };
     if (top) {
       if (resolve(await realpath(top)) !== resolve(actual))
         throw new Error(
           "Choose the Git repository root, not a folder inside it.",
         );
-      git = await gitState(actual, this.run);
+      try {
+        git = await gitState(actual, this.run);
+      } catch (error) {
+        recovery = {
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+    if (recovery) {
+      const config = (key: string) =>
+        this.run("git", [
+          "config",
+          "--file",
+          join(actual, ".git", "config"),
+          "--get",
+          key,
+        ]).catch(() => undefined);
+      recovery.remote = await config("remote.origin.url");
+      let branch = await this.run("git", [
+        "-C",
+        actual,
+        "symbolic-ref",
+        "--short",
+        "HEAD",
+      ]).catch(() => undefined);
+      if (!branch) {
+        const entries = await this.run("git", [
+          "config",
+          "--file",
+          join(actual, ".git", "config"),
+          "--get-regexp",
+          "^branch\\..*\\.remote$",
+        ]).catch(() => "");
+        const candidates = entries
+          .split(/\r?\n/)
+          .map((entry) => /^branch\.(.+)\.remote\s+origin$/.exec(entry))
+          .filter((entry) => entry !== null);
+        if (candidates.length === 1) branch = candidates[0]![1];
+      }
+      if (branch && (await config(`branch.${branch}.remote`)) === "origin") {
+        const merge = await config(`branch.${branch}.merge`);
+        if (merge?.startsWith("refs/heads/")) recovery.branch = merge.slice(11);
+      }
     }
     const worktree = await lstat(join(actual, ".git")).then(
       (stat) => stat.isFile(),
@@ -135,6 +177,7 @@ export class Projects {
       git,
       inOneDrive: await this.cloud(actual),
       worktree,
+      recovery,
     };
   }
   async views(): Promise<ProjectView[]> {
@@ -215,11 +258,28 @@ export class Projects {
         if (!plan.source)
           throw new Error("Choose the existing project folder.");
         inspection = await this.inspect(plan.source);
+        if (inspection.recovery && !plan.recovery)
+          throw new Error(
+            "Git cannot read this repository. Choose Use latest remote version to replace it, or repair Git before importing.",
+          );
         if (inspection.worktree && resolve(inspection.path) !== resolve(target))
           throw new Error(
             "Linked Git worktrees cannot be moved. Keep their current folder.",
           );
       }
+      if (
+        plan.recovery &&
+        (plan.mode !== "import" ||
+          !inspection?.recovery ||
+          plan.recovery.confirmed !== true)
+      )
+        throw new Error(
+          "Recovery requires an unreadable imported repository and explicit confirmation.",
+        );
+      if (plan.recovery && inspection?.worktree)
+        throw new Error(
+          "Linked Git worktrees cannot be replaced. Repair them in Git.",
+        );
       if (this.state.projects.some((p) => resolve(p.path) === resolve(target)))
         throw new Error("This project is already managed by Cloak.");
       if (
@@ -244,11 +304,77 @@ export class Projects {
         if (
           (await exists(link)) &&
           (!inspection || resolve(link) !== resolve(inspection.path))
-        )
-          throw new Error(`The link folder already contains ${name}.`);
+        ) {
+          const stat = await lstat(link);
+          if (
+            !stat.isSymbolicLink() ||
+            resolve(await realpath(link)) !== resolve(target)
+          )
+            throw new Error(`The link folder already contains ${name}.`);
+        }
       }
       const cloneUrl =
-        plan.mode === "clone" ? githubUrl(plan.repository ?? "") : undefined;
+        plan.mode === "clone" || plan.recovery
+          ? githubUrl(plan.repository ?? "")
+          : undefined;
+      if (plan.recovery) {
+        if (plan.createRepository || !plan.useRemote)
+          throw new Error("Recovery uses an existing remote repository.");
+        const source = inspection!.path;
+        if (
+          this.state.projects.some(
+            (project) => resolve(project.path) === resolve(source),
+          )
+        )
+          throw new Error(
+            "This source is already managed by Cloak. Remove its list entry before importing it again.",
+          );
+        return replaceFromRemote(
+          {
+            source,
+            target,
+            root,
+            remote: cloneUrl!,
+            branch: plan.recovery.branch,
+            link: settings.createLinks
+              ? join(resolve(settings.linksFolder), name)
+              : undefined,
+          },
+          this.run,
+          async () => {
+            const current = await this.inspect(source);
+            if (!current.recovery || current.worktree)
+              throw new Error(
+                "The source repository changed. Inspect it again before recovery.",
+              );
+          },
+          async () => {
+            const project: ManagedProject = {
+              id: randomUUID(),
+              name,
+              path: target,
+              remote: cloneUrl!,
+              addedAt: new Date().toISOString(),
+              link: settings.createLinks
+                ? join(resolve(settings.linksFolder), name)
+                : undefined,
+            };
+            let warning: string | undefined;
+            try {
+              project.link = await this.link(project);
+            } catch (error) {
+              warning = `Project recovered. Folder link failed: ${error instanceof Error ? error.message : String(error)}`;
+            }
+            const next = {
+              ...this.state,
+              projects: [...this.state.projects, project],
+            };
+            await this.store.write(next);
+            this.state = next;
+            return { project, warning };
+          },
+        );
+      }
       if (
         plan.mode !== "clone" &&
         !plan.createRepository &&

@@ -12,7 +12,14 @@ import {
 } from "lucide-react";
 import type { Inspection, ProjectPlan, Snapshot } from "../shared/types.ts";
 import { api, message } from "./api.ts";
-import { Button, Icon, Modal, Notice } from "./components.tsx";
+import {
+  Button,
+  Disclosure,
+  Icon,
+  Modal,
+  Notice,
+  Toggle,
+} from "./components.tsx";
 
 export function Onboarding({
   mode,
@@ -33,6 +40,8 @@ export function Onboarding({
     [inspection, setInspection] = useState<Inspection>();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [recover, setRecover] = useState(false),
+    [branch, setBranch] = useState("");
   const reduced = useReducedMotion();
   const existing = Boolean(inspection?.git?.remote),
     title =
@@ -49,7 +58,17 @@ export function Onboarding({
         const result = await api.inspect(source);
         setInspection(result);
         setName(result.name);
-        setRepository(result.git?.remote ?? result.name.replace(/\s+/g, "-"));
+        if (!result.recovery || inspection?.path !== result.path) {
+          setRepository(
+            result.recovery
+              ? (result.recovery.remote ?? "")
+              : (result.git?.remote ?? result.name.replace(/\s+/g, "-")),
+          );
+          setBranch(result.recovery?.branch ?? "");
+          setRecover(false);
+        }
+        if (result.recovery && (inspection?.path !== result.path || !recover))
+          return;
       }
       if (step === 0 && mode === "clone") {
         if (!repository.trim())
@@ -67,6 +86,8 @@ export function Onboarding({
         throw new Error("Give your project a name.");
       if (step === 0 && mode === "new" && !repository)
         setRepository(name.replace(/\s+/g, "-"));
+      if (step === 1 && recover && !repository.trim())
+        throw new Error("Enter the GitHub repository URL to restore from.");
       setStep(step + 1);
     } catch (error) {
       setError(message(error));
@@ -84,8 +105,11 @@ export function Onboarding({
         source,
         repository,
         visibility,
-        createRepository: mode !== "clone" && !existing,
-        useRemote: existing,
+        createRepository: mode !== "clone" && !existing && !recover,
+        useRemote: existing || recover,
+        recovery: recover
+          ? { confirmed: true, branch: branch.trim() || undefined }
+          : undefined,
       });
       onDone(result.warning);
     } catch (error) {
@@ -115,8 +139,10 @@ export function Onboarding({
             busy={busy}
             disabled={
               !snapshot.gitAvailable ||
+              (step === 0 && Boolean(inspection?.recovery) && !recover) ||
               (step === 2 &&
                 !existing &&
+                !recover &&
                 mode !== "clone" &&
                 !snapshot.github.login)
             }
@@ -125,9 +151,11 @@ export function Onboarding({
             {busy && step === 2
               ? "Setting up"
               : step === 2
-                ? mode === "import"
-                  ? "Add project"
-                  : "Create project"
+                ? recover
+                  ? "Replace and add"
+                  : mode === "import"
+                    ? "Add project"
+                    : "Create project"
                 : "Continue"}
           </Button>
         </>
@@ -190,7 +218,12 @@ export function Onboarding({
                 <input
                   autoFocus
                   value={source}
-                  onChange={(event) => setSource(event.target.value)}
+                  onChange={(event) => {
+                    setSource(event.target.value);
+                    setInspection(undefined);
+                    setRecover(false);
+                    setError("");
+                  }}
                   placeholder="C:\Projects\my-project"
                 />
                 <Button
@@ -199,11 +232,37 @@ export function Onboarding({
                   disabled={!snapshot.desktop}
                   onClick={async () => {
                     const path = await api.chooseFolder();
-                    if (path) setSource(path);
+                    if (path) {
+                      setSource(path);
+                      setInspection(undefined);
+                      setRecover(false);
+                      setError("");
+                    }
                   }}
                 />
               </div>
             </label>
+          )}
+          {step === 0 && inspection?.recovery && (
+            <div className="recovery-choice">
+              <Notice>Git can't read this project.</Notice>
+              {inspection.worktree ? (
+                <p className="hint">
+                  This is a linked Git worktree. Repair it in Git before
+                  importing.
+                </p>
+              ) : (
+                <Toggle
+                  label="Use latest remote version"
+                  checked={recover}
+                  onChange={setRecover}
+                  hint="Fresh clone. Deletes all local files and unpublished commits, including ignored files."
+                />
+              )}
+              <Disclosure title="Git error">
+                <pre className="log">{inspection.recovery.error}</pre>
+              </Disclosure>
+            </div>
           )}
           {step === 0 && mode === "clone" && (
             <label className="field">
@@ -228,7 +287,26 @@ export function Onboarding({
                   />
                 </label>
               )}
-              {existing ? (
+              {recover ? (
+                <>
+                  <label className="field">
+                    GitHub repository
+                    <input
+                      value={repository}
+                      onChange={(event) => setRepository(event.target.value)}
+                      placeholder="https://github.com/owner/project"
+                    />
+                  </label>
+                  <label className="field">
+                    Branch
+                    <input
+                      value={branch}
+                      onChange={(event) => setBranch(event.target.value)}
+                      placeholder="Remote default"
+                    />
+                  </label>
+                </>
+              ) : existing ? (
                 <div className="repository-choice">
                   <Icon icon={GitBranch} />
                   <div>
@@ -297,6 +375,12 @@ export function Onboarding({
               </div>
               <h3>{name}</h3>
               <dl>
+                {recover && (
+                  <div>
+                    <dt>Replace</dt>
+                    <dd>{inspection?.path}</dd>
+                  </div>
+                )}
                 <div>
                   <dt>Folder</dt>
                   <dd>{destination}</dd>
@@ -305,7 +389,13 @@ export function Onboarding({
                   <dt>Repository</dt>
                   <dd>{repository}</dd>
                 </div>
-                {!existing && mode !== "clone" && (
+                {recover && (
+                  <div>
+                    <dt>Branch</dt>
+                    <dd>{branch.trim() || "Remote default"}</dd>
+                  </div>
+                )}
+                {!existing && mode !== "clone" && !recover && (
                   <div>
                     <dt>Visibility</dt>
                     <dd>{visibility === "private" ? "Private" : "Public"}</dd>
@@ -320,12 +410,20 @@ export function Onboarding({
                   </div>
                 )}
               </dl>
-              {mode === "import" && inspection?.path !== destination && (
-                <p className="hint">
-                  Cloak moves the whole folder, including local files. Close
-                  anything using it first.
-                </p>
+              {recover && (
+                <Notice>
+                  Replaces all local files and unpublished commits, including
+                  ignored files. The remote repository is unchanged.
+                </Notice>
               )}
+              {mode === "import" &&
+                !recover &&
+                inspection?.path !== destination && (
+                  <p className="hint">
+                    Cloak moves the whole folder, including local files. Close
+                    anything using it first.
+                  </p>
+                )}
               {snapshot.settings.autoPull && (
                 <p className="hint">
                   Automatic updates are enabled.{" "}

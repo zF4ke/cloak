@@ -10,6 +10,7 @@ import {
   rm,
   symlink,
   rename,
+  readdir,
 } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -478,12 +479,347 @@ test("two service instances retain each other's registry changes", async () => {
   }
 });
 
+test("an unreadable index exposes remote recovery without treating the folder as a new repository", async () => {
+  const f = await fixture();
+  try {
+    await writeFile(join(f.source, ".git", "index"), "");
+    await assert.rejects(f.git(f.source, "status"), /index/);
+    const inspection = await f.projects.inspect(f.source);
+    assert.equal(inspection.git, undefined);
+    assert.equal(inspection.recovery?.remote, f.remote);
+    assert.equal(inspection.recovery?.branch, "main");
+    assert.match(inspection.recovery?.error ?? "", /index/);
+    await assert.rejects(f.add(), /latest remote version/);
+    assert.equal((await lstat(f.source)).isSymbolicLink(), false);
+  } finally {
+    await f.close();
+  }
+});
+
 test("an unreadable Git folder cannot be imported as a new repository", async () => {
   const f = await fixture();
   try {
     const broken = join(f.cloud, "broken");
     await mkdir(join(broken, ".git"), { recursive: true });
-    await assert.rejects(f.projects.inspect(broken), /Git cannot read/);
+    assert.match(
+      (await f.projects.inspect(broken)).recovery?.error ?? "",
+      /Git cannot read/,
+    );
+    await assert.rejects(
+      f.projects.create({
+        mode: "import",
+        name: "broken",
+        source: broken,
+        useRemote: false,
+        createRepository: true,
+        visibility: "private",
+      }),
+      /latest remote version/,
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+async function recoveryFixture() {
+  const f = await fixture();
+  const url = "https://github.com/cloak-test/project.git";
+  await f.git(f.source, "remote", "set-url", "origin", url);
+  const execute: Run = (command, args, options) =>
+    run(
+      command,
+      args.map((arg) => (arg === url ? f.remote : arg)),
+      options,
+    );
+  const projects = new Projects(
+    join(f.root, "state"),
+    f.settings,
+    [f.cloud],
+    execute,
+  );
+  await projects.initialize();
+  const recover = (source = f.source) =>
+    projects.create({
+      mode: "import",
+      name: "project",
+      source,
+      repository: url,
+      visibility: "private",
+      useRemote: true,
+      createRepository: false,
+      recovery: { confirmed: true, branch: "main" },
+    });
+  return { ...f, url, execute, projects, recover };
+}
+
+test("explicit recovery clones latest tracked branch, replaces all local files, and restores the folder link", async () => {
+  const f = await recoveryFixture();
+  try {
+    await f.git(f.source, "branch", "-m", "work");
+    await writeFile(join(f.source, "unpublished.txt"), "unpublished");
+    await f.git(f.source, "add", ".");
+    await f.git(f.source, "commit", "-m", "unpublished");
+    await writeFile(join(f.source, ".env"), "ignored private file");
+    await writeFile(join(f.source, "draft.txt"), "untracked");
+    await writeFile(join(f.source, ".git", "index"), "");
+    assert.equal((await f.projects.inspect(f.source)).recovery?.branch, "main");
+    await f.upstream();
+    const { project, warning } = await f.recover();
+    assert.equal(warning, undefined);
+    assert.equal(
+      await f.git(project.path, "rev-parse", "HEAD"),
+      await f.git(f.remote, "rev-parse", "refs/heads/main"),
+    );
+    for (const path of [".env", "draft.txt", "unpublished.txt"])
+      await assert.rejects(readFile(join(project.path, path)));
+    assert.equal(await realpath(f.source), project.path);
+    assert.equal((await lstat(f.source)).isSymbolicLink(), true);
+    assert.equal((await f.projects.views())[0]?.git?.branch, "main");
+    assert.deepEqual(await readdir(f.local), ["project"]);
+  } finally {
+    await f.close();
+  }
+});
+
+test("unreadable HEAD uses the sole origin tracking branch and can recover in place", async () => {
+  const f = await recoveryFixture();
+  try {
+    const target = join(f.local, "project");
+    await rename(f.source, target);
+    await writeFile(join(target, ".git", "HEAD"), "broken HEAD\n");
+    const inspection = await f.projects.inspect(target);
+    assert.equal(inspection.recovery?.remote, f.url);
+    assert.equal(inspection.recovery?.branch, "main");
+    const { project } = await f.recover(target);
+    assert.equal(project.path, target);
+    assert.equal((await f.projects.views())[0]?.git?.hasCommit, true);
+    assert.equal(await realpath(f.source), target);
+    assert.deepEqual(await readdir(f.local), ["project"]);
+  } finally {
+    await f.close();
+  }
+});
+
+test("failed recovery clone leaves original files, unreadable metadata and project list unchanged", async () => {
+  const f = await recoveryFixture();
+  try {
+    await writeFile(join(f.source, ".git", "index"), "");
+    await writeFile(join(f.source, ".env"), "original private file");
+    const execute: Run = (command, args, options) => {
+      if (command === "git" && args[0] === "clone")
+        throw new Error("fixture authentication failed");
+      return f.execute(command, args, options);
+    };
+    const projects = new Projects(
+      join(f.root, "state"),
+      f.settings,
+      [f.cloud],
+      execute,
+    );
+    await assert.rejects(
+      projects.create({
+        mode: "import",
+        name: "project",
+        source: f.source,
+        repository: f.url,
+        visibility: "private",
+        useRemote: true,
+        createRepository: false,
+        recovery: { confirmed: true, branch: "main" },
+      }),
+      /Original folder unchanged.*authentication failed/,
+    );
+    assert.equal(
+      await readFile(join(f.source, ".env"), "utf8"),
+      "original private file",
+    );
+    assert.equal(await readFile(join(f.source, ".git", "index"), "utf8"), "");
+    assert.equal((await lstat(f.source)).isSymbolicLink(), false);
+    assert.deepEqual(await projects.views(), []);
+    assert.deepEqual(await readdir(f.local), []);
+  } finally {
+    await f.close();
+  }
+});
+
+test("failed recovery registration rolls back the original folder and removes the new link", async () => {
+  const f = await recoveryFixture();
+  try {
+    await writeFile(join(f.source, ".git", "index"), "");
+    await writeFile(join(f.source, ".env"), "retain on rollback");
+    const registry = join(f.root, "state", "projects.json");
+    const execute: Run = async (command, args, options) => {
+      const result = await f.execute(command, args, options);
+      if (command === "git" && args[0] === "clone") await mkdir(registry);
+      return result;
+    };
+    const projects = new Projects(
+      join(f.root, "state"),
+      f.settings,
+      [f.cloud],
+      execute,
+    );
+    await assert.rejects(
+      projects.create({
+        mode: "import",
+        name: "project",
+        source: f.source,
+        repository: f.url,
+        visibility: "private",
+        useRemote: true,
+        createRepository: false,
+        recovery: { confirmed: true, branch: "main" },
+      }),
+      /Original folder restored/,
+    );
+    assert.equal((await lstat(f.source)).isSymbolicLink(), false);
+    assert.equal(
+      await readFile(join(f.source, ".env"), "utf8"),
+      "retain on rollback",
+    );
+    assert.equal(await readFile(join(f.source, ".git", "index"), "utf8"), "");
+    assert.deepEqual(await readdir(f.local), []);
+    await rm(registry, { recursive: true });
+    assert.deepEqual(await projects.views(), []);
+  } finally {
+    await f.close();
+  }
+});
+
+test("explicit recovery refuses healthy repositories, linked worktrees and unrelated destinations", async () => {
+  const f = await recoveryFixture();
+  try {
+    await assert.rejects(f.recover(), /unreadable imported repository/);
+    await f.git(
+      f.source,
+      "worktree",
+      "add",
+      "-b",
+      "linked",
+      join(f.cloud, "linked"),
+    );
+    await rm(join(f.cloud, "linked", ".git"));
+    await writeFile(join(f.cloud, "linked", ".git"), "broken worktree\n");
+    await assert.rejects(
+      f.recover(join(f.cloud, "linked")),
+      /Linked Git worktrees/,
+    );
+    await writeFile(join(f.source, ".git", "index"), "");
+    await mkdir(join(f.local, "project"));
+    await writeFile(join(f.local, "project", "sentinel"), "unrelated");
+    await assert.rejects(f.recover(), /destination already exists/);
+    assert.equal(
+      await readFile(join(f.local, "project", "sentinel"), "utf8"),
+      "unrelated",
+    );
+    assert.equal((await lstat(f.source)).isSymbolicLink(), false);
+  } finally {
+    await f.close();
+  }
+});
+
+test("recovery without a branch uses the committed remote default", async () => {
+  const f = await recoveryFixture();
+  try {
+    await f.git(f.remote, "symbolic-ref", "HEAD", "refs/heads/main");
+    await writeFile(join(f.source, ".git", "index"), "");
+    const { project } = await f.projects.create({
+      mode: "import",
+      name: "project",
+      source: f.source,
+      repository: f.url,
+      visibility: "private",
+      useRemote: true,
+      createRepository: false,
+      recovery: { confirmed: true },
+    });
+    assert.equal(
+      await f.git(project.path, "rev-parse", "HEAD"),
+      await f.git(f.remote, "rev-parse", "HEAD"),
+    );
+  } finally {
+    await f.close();
+  }
+});
+
+test("recovery keeps a valid pre-existing folder link during registration rollback", async () => {
+  const f = await recoveryFixture();
+  try {
+    const target = join(f.local, "project");
+    await rename(f.source, target);
+    await symlink(
+      target,
+      f.source,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    await writeFile(join(target, ".git", "index"), "");
+    const registry = join(f.root, "state", "projects.json");
+    const execute: Run = async (command, args, options) => {
+      const result = await f.execute(command, args, options);
+      if (command === "git" && args[0] === "clone") await mkdir(registry);
+      return result;
+    };
+    const projects = new Projects(
+      join(f.root, "state"),
+      f.settings,
+      [f.cloud],
+      execute,
+    );
+    await assert.rejects(
+      projects.create({
+        mode: "import",
+        name: "project",
+        source: target,
+        repository: f.url,
+        visibility: "private",
+        useRemote: true,
+        createRepository: false,
+        recovery: { confirmed: true, branch: "main" },
+      }),
+      /Original folder restored/,
+    );
+    assert.equal(await realpath(f.source), target);
+    assert.equal(await readFile(join(target, ".git", "index"), "utf8"), "");
+    assert.deepEqual(await readdir(f.local), ["project"]);
+  } finally {
+    await f.close();
+  }
+});
+
+test("a link collision after cloning keeps the recovered project registered and exposes repair", async () => {
+  const f = await recoveryFixture();
+  try {
+    const settings = { ...f.settings, linksFolder: join(f.cloud, "links") };
+    const link = join(settings.linksFolder, "project");
+    await writeFile(join(f.source, ".git", "index"), "");
+    const execute: Run = async (command, args, options) => {
+      const result = await f.execute(command, args, options);
+      if (command === "git" && args[0] === "clone")
+        await mkdir(link, { recursive: true });
+      return result;
+    };
+    const projects = new Projects(
+      join(f.root, "state"),
+      settings,
+      [f.cloud],
+      execute,
+    );
+    const result = await projects.create({
+      mode: "import",
+      name: "project",
+      source: f.source,
+      repository: f.url,
+      visibility: "private",
+      useRemote: true,
+      createRepository: false,
+      recovery: { confirmed: true, branch: "main" },
+    });
+    assert.match(result.warning ?? "", /Folder link failed/);
+    assert.equal((await projects.views())[0]?.linkMissing, true);
+    assert.deepEqual(await readdir(f.local), ["project"]);
+    await rm(link, { recursive: true });
+    await projects.repairLink(result.project.id);
+    assert.equal(await realpath(link), result.project.path);
   } finally {
     await f.close();
   }

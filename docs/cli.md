@@ -22,6 +22,14 @@ cloak sync "My project"
 
 Use `--public` on new/add to create a public repository. `--confirm` authorizes setup, folder move/link and needed repository creation. Quote paths with spaces. Set roots and update preferences in desktop Settings. Check can discard edits on a behind branch under the default policy. Read [Projects](projects.md#updates-and-sync).
 
+For an unreadable repository, explicit recovery is available through:
+
+```powershell
+cloak add "C:\Users\you\OneDrive\Projects\my-project" --confirm --use-remote-version
+```
+
+This replaces **all local files and unpublished commits, including ignored files** with a fresh remote clone. It leaves GitHub unchanged. Cloak reads origin and its tracking branch without depending on the index. Add `--repository https://github.com/you/my-project` if origin is missing or incorrect. Add `--branch main` to select a branch. Otherwise, the discovered origin tracking branch or remote default is used. Read [Recovery](projects.md#recovery) before using it.
+
 ## Original protection commands
 
 | Command                   | Behavior                                                  |

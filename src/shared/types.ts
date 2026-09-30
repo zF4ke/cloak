@@ -65,6 +65,7 @@ export type ProjectPlan = {
   visibility: "private" | "public";
   createRepository: boolean;
   useRemote: boolean;
+  recovery?: { confirmed: true; branch?: string };
 };
 export type Inspection = {
   path: string;
@@ -72,6 +73,7 @@ export type Inspection = {
   git?: GitState;
   inOneDrive: boolean;
   worktree: boolean;
+  recovery?: { error: string; remote?: string; branch?: string };
 };
 export type CloakApi = {
   snapshot(): Promise<Snapshot>;

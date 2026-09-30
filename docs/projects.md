@@ -50,6 +50,14 @@ Install Cloak, Git and GitHub CLI there, sign in, choose its local roots and Clo
 
 ## Recovery
 
+If Add existing reports that Git cannot read a repository, turn on **Use latest remote version** to rebuild it. Review the GitHub URL and branch, then choose **Replace and add**. Cloak suggests the origin tracking branch if its configuration is readable, even when the index or HEAD is broken. Leave Branch empty to use the remote's default branch. If origin cannot be read, enter the GitHub URL yourself.
+
+This recovery replaces the entire local copy with committed remote content. It deletes unpublished commits, edited files, untracked files and ignored files, including credentials, databases and dependencies. It does not modify GitHub. Ordinary Add existing and automatic updates retain their existing policies.
+
+Cloak clones and verifies the remote outside OneDrive before moving the old folder. A failed clone leaves the original in place. A failed registration restores it. Successful recovery removes the displaced copy and creates the configured folder link. If a process or OneDrive prevents a move, close it and retry. If cleanup fails, the warning gives the retained folder path. Linked worktrees require manual Git repair. A healthy repository cannot use this recovery mode.
+
+If the app or PC stops during replacement, do not delete `.cloak-recovery-*` folders in the real project root. `old` contains the displaced copy until registration succeeds. Inspect the managed project and these folders before restoring or removing them.
+
 | Problem                        | Action                                                                                                       |
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | Destination or link exists     | Inspect it or choose another name. Cloak will not replace it.                                                |
@@ -60,3 +68,4 @@ Install Cloak, Git and GitHub CLI there, sign in, choose its local roots and Clo
 | Missing repository after setup | Open details and Connect repository.                                                                         |
 | Unreadable registry            | Quit Cloak and repair `%LOCALAPPDATA%\cloak\projects.json`. Keep project folders.                            |
 | Move fails                     | Close processes using the folder and use a same-drive destination. The error identifies the retained source. |
+| Git index or HEAD unreadable   | Use latest remote version in Add existing after reviewing the deletion warning, URL and branch.              |

@@ -199,6 +199,125 @@ try {
     "document.querySelector('dialog button[aria-label=Close]').click()",
   );
   await pause(400);
+  const broken = join(directory, "incoming", "Broken");
+  await mkdir(broken, { recursive: true });
+  execFileSync("git", ["init", "-b", "main", broken], {
+    windowsHide: true,
+    stdio: "pipe",
+  });
+  execFileSync(
+    "git",
+    [
+      "-C",
+      broken,
+      "remote",
+      "add",
+      "origin",
+      "https://github.com/cloak-test/project.git",
+    ],
+    { windowsHide: true, stdio: "pipe" },
+  );
+  execFileSync(
+    "git",
+    ["-C", broken, "config", "branch.main.remote", "origin"],
+    { windowsHide: true, stdio: "pipe" },
+  );
+  execFileSync(
+    "git",
+    ["-C", broken, "config", "branch.main.merge", "refs/heads/main"],
+    { windowsHide: true, stdio: "pipe" },
+  );
+  await writeFile(join(broken, ".git", "index"), "");
+  await native.evaluate(
+    "[...document.querySelectorAll('.action-tile')].find(b=>b.textContent.includes('Add existing')).click()",
+  );
+  await pause(350);
+  await native.call("Input.insertText", { text: broken });
+  await native.evaluate(
+    "document.querySelector('dialog .button.primary').click()",
+  );
+  for (
+    let i = 0;
+    i < 40 &&
+    !(await native.evaluate(
+      "Boolean(document.querySelector('.recovery-choice'))",
+    ));
+    i++
+  )
+    await pause(100);
+  assert.equal(
+    await native.evaluate(
+      "document.querySelector('dialog .button.primary').disabled",
+    ),
+    true,
+  );
+  assert.equal(
+    await native.evaluate(
+      "document.querySelector('.recovery-choice [role=switch]').getAttribute('aria-checked')",
+    ),
+    "false",
+  );
+  await screenshot(native, "recovery-choice");
+  await native.evaluate(
+    await readFile("node_modules/axe-core/axe.min.js", "utf8"),
+  );
+  assert.deepEqual(
+    await native.evaluate(
+      "axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa']}}).then(r=>r.violations.map(v=>v.id))",
+    ),
+    [],
+  );
+  await native.evaluate(
+    "document.querySelector('.recovery-choice [role=switch]').focus()",
+  );
+  await native.call("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key: " ",
+    code: "Space",
+    windowsVirtualKeyCode: 32,
+  });
+  await native.call("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key: " ",
+    code: "Space",
+    windowsVirtualKeyCode: 32,
+  });
+  assert.equal(
+    await native.evaluate(
+      "document.querySelector('.recovery-choice [role=switch]').getAttribute('aria-checked')",
+    ),
+    "true",
+  );
+  await native.evaluate(
+    "document.querySelector('dialog .button.primary').click()",
+  );
+  await pause(600);
+  assert.deepEqual(
+    await native.evaluate(
+      "[...document.querySelectorAll('dialog input')].map(i=>i.value)",
+    ),
+    ["Broken", "https://github.com/cloak-test/project.git", "main"],
+  );
+  await screenshot(native, "recovery-repository");
+  await native.evaluate(
+    "document.querySelector('dialog .button.primary').click()",
+  );
+  await pause(400);
+  assert.match(
+    await native.evaluate("document.querySelector('dialog').innerText"),
+    /Replaces all local files and unpublished commits, including ignored files/,
+  );
+  assert.equal(
+    await native.evaluate(
+      "document.querySelector('dialog .button.primary').textContent.trim()",
+    ),
+    "Replace and add",
+  );
+  await screenshot(native, "recovery-review");
+  await native.evaluate(
+    "document.querySelector('dialog button[aria-label=Close]').click()",
+  );
+  await pause(400);
   await native.evaluate(
     "document.querySelector('nav button[aria-label=Settings]').click()",
   );

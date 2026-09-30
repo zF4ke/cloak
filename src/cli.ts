@@ -91,6 +91,26 @@ async function main() {
         mode === "import"
           ? await service.projects.inspect(argument)
           : undefined;
+      const recover = options.has("--use-remote-version");
+      if (recover && mode !== "import")
+        throw new Error(
+          "--use-remote-version applies only to add. It replaces all local files and unpublished commits, including ignored files.",
+        );
+      const optionValue = (flag: string) => {
+        const index = rest.indexOf(flag);
+        if (index === -1) return undefined;
+        const value = rest[index + 1];
+        if (!value || value.startsWith("--"))
+          throw new Error(`Give ${flag} a value.`);
+        return value;
+      };
+      const recoveryRepository = recover
+        ? optionValue("--repository") || inspection?.recovery?.remote
+        : undefined;
+      if (recover && !recoveryRepository)
+        throw new Error(
+          "Git cannot discover origin. Provide --repository <GitHub URL> with --use-remote-version.",
+        );
       const name =
         mode === "new"
           ? argument
@@ -108,10 +128,19 @@ async function main() {
         repository:
           mode === "clone"
             ? argument
-            : inspection?.git?.remote || name.replace(/\s+/g, "-"),
+            : recoveryRepository ||
+              inspection?.git?.remote ||
+              name.replace(/\s+/g, "-"),
         visibility: options.has("--public") ? "public" : "private",
-        createRepository: mode !== "clone" && !inspection?.git?.remote,
-        useRemote: Boolean(inspection?.git?.remote),
+        createRepository:
+          mode !== "clone" && !inspection?.git?.remote && !recover,
+        useRemote: Boolean(inspection?.git?.remote) || recover,
+        recovery: recover
+          ? {
+              confirmed: true,
+              branch: optionValue("--branch") || inspection?.recovery?.branch,
+            }
+          : undefined,
       });
       console.log(`Added ${result.project.name}\n${result.project.path}`);
       if (result.warning) console.error(result.warning);
