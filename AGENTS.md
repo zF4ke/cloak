@@ -8,7 +8,7 @@ Keep Git and filesystem mutations in `src/core/`, not React components or IPC ha
 
 Keep native credentials in Git and GitHub CLI. Do not add tokens to Cloak's registry. Preserve sandboxed renderers, explicit IPC methods and sender validation.
 
-Use named reusable controls, consistent insets, keyboard interactions and reduced motion. Inspect real rendered states after UI edits. Native app corners belong to Windows. Record durable design lessons in the private `zF4ke/skills` repository without publishing personal reference screenshots here.
+Use named reusable controls, consistent insets, keyboard interactions and reduced motion. Inspect real rendered states after UI edits. Native app corners belong to Windows. Record durable design lessons in the `zF4ke/skills` repository without publishing personal reference screenshots here.
 
 Run `npm run build` and the relevant integration tests. Run `npm run smoke:native` after installer, packaging, preload or IPC changes. Use `docs/development.md` for packaging and release instructions. Do not claim a live OneDrive or GitHub operation was verified if only an isolated fixture was tested.
 

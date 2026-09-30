@@ -33,4 +33,4 @@ Update `package.json`, build, test, inspect UI and review against the feature sp
 
 The native icon is generated from the owned SVG with transparency. To regenerate PNG/ICO assets after editing the mark, use Python with PyMuPDF and Pillow, then run `python scripts/generate-icons.py`. Normal app builds use the committed assets and do not need Python.
 
-The personal UI skill lives in private `zF4ke/skills`. Its README explains installation through the skills.sh CLI. It is independent of Cloak's installation and source tree.
+The personal UI skill lives in `zF4ke/skills`. Its README explains installation through the skills.sh CLI. It is independent of Cloak's installation and source tree.
