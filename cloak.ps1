@@ -19,7 +19,8 @@
 param(
   [Parameter(Position = 0)][string]$Command = 'help',
   [Parameter(Position = 1)][string]$Arg,
-  [switch]$Follow
+  [switch]$Follow,
+  [Parameter(ValueFromRemainingArguments = $true)][string[]]$ProjectOptions
 )
 
 $ErrorActionPreference = 'Stop'
@@ -31,7 +32,7 @@ $Host_     = $env:COMPUTERNAME
 
 function Ok($t)   { Write-Host "  + $t" -ForegroundColor Green }
 function Warn($t) { Write-Host "  ! $t" -ForegroundColor Yellow }
-function Bad($t)  { Write-Host "  x $t" -ForegroundColor Red }
+function Bad($t)  { throw $t }
 function Info($t) { Write-Host "    $t" -ForegroundColor DarkGray }
 
 # ---------------- daemon control ----------------
@@ -43,7 +44,7 @@ function Daemon-Procs {
 function Cmd-Start {
   if ((Daemon-Procs).Count) { Ok "daemon already running"; return }
   if (-not (Test-Path $Launcher)) { Bad "autostart not installed - run: cloak install"; return }
-  Start-Process wscript.exe -ArgumentList "`"$Launcher`"" | Out-Null
+  Start-Process wscript.exe -ArgumentList "`"$Launcher`"" -WindowStyle Hidden | Out-Null
   Start-Sleep -Seconds 2
   if ((Daemon-Procs).Count) { Ok "daemon started" } else { Bad "daemon did not start" }
 }
@@ -51,6 +52,10 @@ function Cmd-Stop {
   $procs = Daemon-Procs
   foreach ($p in $procs) { Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue }
   Ok "daemon stopped ($($procs.Count) process(es))"
+  if (-not (Get-Process OneDrive -ErrorAction SilentlyContinue)) {
+    $exe = @("$env:LOCALAPPDATA\Microsoft\OneDrive\OneDrive.exe",'C:\Program Files\Microsoft OneDrive\OneDrive.exe') | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($exe) { Start-Process -FilePath $exe -ArgumentList '/background' -WindowStyle Hidden; Ok 'OneDrive resumed' }
+  }
 }
 function Cmd-Log {
   if (-not (Test-Path $LogFile)) { Warn "no log yet ($LogFile)"; return }
@@ -64,7 +69,7 @@ function Load-State {
     $raw = Get-Content $StateFile -Raw
     if ([string]::IsNullOrWhiteSpace($raw)) { return @() }
     return @(($raw | ConvertFrom-Json) | Where-Object { $_ -and $_.path })
-  } catch { return @() }
+  } catch { throw "Cannot read $StateFile. Repair it before changing cloaked folders: $($_.Exception.Message)" }
 }
 function Save-State($entries) {
   New-Item -ItemType Directory -Force -Path $StateDir | Out-Null
@@ -72,7 +77,7 @@ function Save-State($entries) {
   if ($clean.Count -eq 0) { Set-Content -Path $StateFile -Value '[]' -Encoding UTF8; return }
   ConvertTo-Json -InputObject $clean -Depth 5 | Set-Content -Path $StateFile -Encoding UTF8
 }
-function Is-Junction($p) { (Test-Path $p) -and ((([int](Get-Item $p -Force).Attributes) -band 0x400) -ne 0) }
+function Is-Junction($p) { (Test-Path -LiteralPath $p) -and ((Get-Item -LiteralPath $p -Force).LinkType -in 'Junction','SymbolicLink') }
 
 function Scratch-For($target) {
   $tvol = Split-Path -Qualifier $target
@@ -110,9 +115,14 @@ function Cloak-On($target) {
   Save-State ($state + $entry)
   try { Move-Item -LiteralPath $target -Destination $scratch -ErrorAction Stop }
   catch { Save-State $state; Bad "Couldn't move $target (a file open or a shell inside it?): $($_.Exception.Message)"; return }
-  New-Item -ItemType Junction -Path $target -Target $scratch | Out-Null
+  try { New-Item -ItemType Junction -Path $target -Target $scratch | Out-Null }
+  catch {
+    # Restore the move when link creation fails. Keep recovery state if restoration fails.
+    if (-not (Test-Path -LiteralPath $target)) { Move-Item -LiteralPath $scratch -Destination $target -ErrorAction Stop; Save-State $state }
+    throw
+  }
   Ok "Cloaked: $target"
-  Info "bytes moved to $scratch (OneDrive now ignores the junction)"
+  Info "bytes moved to $scratch; use cloak probe to observe OneDrive behavior here"
 }
 
 function Cloak-Off($target) {
@@ -172,6 +182,13 @@ function Show-Help {
 }
 
 switch ($Command.ToLower()) {
+  { $_ -in 'projects','new','add','clone','sync','check' } {
+    $cli = Join-Path $Repo 'dist\cli.cjs'
+    if (-not (Test-Path -LiteralPath $cli)) { throw 'Build the desktop app first: npm install; npm run build.' }
+    $env:CLOAK_SCRIPTS_DIR = $Repo
+    & node $cli $Command $Arg @ProjectOptions
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+  }
   'status'      { & "$Repo\install.ps1" -Status }
   'install'     { & "$Repo\install.ps1" }
   'uninstall'   { & "$Repo\install.ps1" -Uninstall }

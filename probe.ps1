@@ -127,7 +127,7 @@ try {
   $findings.ConflictCopies           = $conflicts.Count
   $findings.JunctionSurvived         = $stillJunction
 
-  if (-not $cloudTouched) { Ok "No cloud placeholder/recall attributes appeared on the target - OneDrive is NOT following the junction." }
+  if (-not $cloudTouched) { Ok "No cloud placeholder/recall attributes appeared on the target - no interference observed during this check." }
   else { Bad "Cloud recall/offline attributes appeared on the target - OneDrive followed the junction into local scratch." }
   if ($conflicts.Count -eq 0) { Ok "No OneDrive conflict copies created." }
   else { Warn "$($conflicts.Count) possible conflict file(s) appeared: $($conflicts.Name -join ', ')" }
@@ -154,8 +154,8 @@ finally {
 Step "Verdict"
 $junctionSafe = $findings.JunctionCreated -and (-not $findings.CloudPlaceholderedTarget) -and ($findings.ConflictCopies -eq 0)
 if ($junctionSafe) {
-  Write-Host "  => JUNCTION MECHANISM IS SAFE on this machine." -ForegroundColor Green
-  Write-Host "    cloak can isolate by junctioning the project to local scratch; OneDrive ignores it." -ForegroundColor Green
+  Write-Host "  => No interference observed during this short check." -ForegroundColor Green
+  Write-Host "    This observation is not a guarantee. OneDrive does not officially support folder links." -ForegroundColor Green
 } else {
   Write-Host "  => JUNCTION MECHANISM IS RISKY here - OneDrive interfered." -ForegroundColor Red
   Write-Host "    Fall back to: pause OneDrive during the isolate/restore swap, or same-volume move-out." -ForegroundColor Yellow

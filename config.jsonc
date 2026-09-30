@@ -1,9 +1,7 @@
 {
   // folders to watch for work activity. any change here pauses OneDrive;
   // when everything is quiet for idleSeconds, OneDrive resumes and syncs.
-  "watchRoots": [
-    "C:\\Users\\yFake\\OneDrive\\Ambiente de Trabalho\\www\\Projects"
-  ],
+  "watchRoots": [],
 
   // directory names whose activity should NOT pause OneDrive (empty by default;
   // add your own, e.g. [".git", "node_modules", "build"])
@@ -28,5 +26,5 @@
   "pollSeconds": 5,
 
   // where cloak.ps1 (junction mode) keeps a folder's real bytes while cloaked
-  "scratchDir": "C:\\Users\\yFake\\AppData\\Local\\cloak\\scratch"
+  "scratchDir": ""
 }

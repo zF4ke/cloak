@@ -113,7 +113,7 @@ if ($Uninstall) {
   Remove-FromPath
   if (-not (Get-Process OneDrive -ErrorAction SilentlyContinue)) {
     $exe = @("$env:LOCALAPPDATA\Microsoft\OneDrive\OneDrive.exe","C:\Program Files\Microsoft OneDrive\OneDrive.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
-    if ($exe) { Start-Process $exe -ArgumentList '/background'; Ok "resumed OneDrive" }
+    if ($exe) { Start-Process $exe -ArgumentList '/background' -WindowStyle Hidden; Ok "resumed OneDrive" }
   }
   Write-Host ""
   Write-Host "done. your folders were never touched." -ForegroundColor Cyan
@@ -215,9 +215,13 @@ $DeployDir    = Join-Path $env:LOCALAPPDATA 'cloak'
 $DeployDaemon = Join-Path $DeployDir 'cloakd.ps1'
 New-Item -ItemType Directory -Force -Path $DeployDir | Out-Null
 foreach ($f in 'cloak.ps1','cloakd.ps1','install.ps1','probe.ps1') {
-  if (Test-Path (Join-Path $Repo $f)) { Copy-Item (Join-Path $Repo $f) (Join-Path $DeployDir $f) -Force }
+  if ((Test-Path (Join-Path $Repo $f)) -and [IO.Path]::GetFullPath((Join-Path $Repo $f)) -ne [IO.Path]::GetFullPath((Join-Path $DeployDir $f))) { Copy-Item -LiteralPath (Join-Path $Repo $f) -Destination (Join-Path $DeployDir $f) -Force }
 }
-Copy-Item $Config (Join-Path $DeployDir 'config.jsonc') -Force
+if ([IO.Path]::GetFullPath($Config) -ne [IO.Path]::GetFullPath((Join-Path $DeployDir 'config.jsonc'))) { Copy-Item -LiteralPath $Config -Destination (Join-Path $DeployDir 'config.jsonc') -Force }
+if ((Test-Path -LiteralPath (Join-Path $Repo 'dist\cli.cjs')) -and [IO.Path]::GetFullPath($Repo) -ne [IO.Path]::GetFullPath($DeployDir)) {
+  New-Item -ItemType Directory -Force -Path (Join-Path $DeployDir 'dist') | Out-Null
+  Copy-Item -LiteralPath (Join-Path $Repo 'dist\cli.cjs') -Destination (Join-Path $DeployDir 'dist\cli.cjs') -Force
+}
 Ok "deployed to $DeployDir"
 
 # Hidden launcher .vbs in the Startup folder. wscript.exe has no console window,
@@ -229,10 +233,10 @@ $vbs = 'CreateObject("WScript.Shell").Run """' + $pwshExe + '"" -NoProfile -Exec
 Set-Content -Path $Launcher -Value $vbs -Encoding ASCII
 Ok "autostart installed (Startup folder, runs hidden at logon)"
 
-Start-Process wscript.exe -ArgumentList "`"$Launcher`"" | Out-Null
+Start-Process wscript.exe -ArgumentList "`"$Launcher`"" -WindowStyle Hidden | Out-Null
 Start-Sleep -Seconds 4
 if ((Daemon-Pids).Count) { Ok "daemon running" }
-else { Bad "daemon did not start. run it manually to see why:  pwsh -File `"$DeployDaemon`"" }
+else { Bad "daemon did not start. run it manually to see why:  pwsh -File `"$DeployDaemon`""; exit 2 }
 
 Add-ToPath
 

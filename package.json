@@ -1,0 +1,40 @@
+{
+  "name": "cloak",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/app/main.cjs",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "tsc --noEmit && node scripts/build.mjs",
+    "start": "npm run build && electron .",
+    "test": "node scripts/test.mjs",
+    "smoke:native": "node scripts/smoke-native.mjs",
+    "package": "npm run build && node scripts/package.mjs",
+    "installer": "npm run package && node scripts/build-installer.mjs",
+    "skill:install": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/install-design-skill.ps1"
+  },
+  "dependencies": {
+    "@radix-ui/react-select": "^2.3.7",
+    "jsonc-parser": "3.3.1",
+    "lucide-react": "1.49.0",
+    "motion": "13.4.6",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "axe-core": "^4.13.0",
+    "electron": "44.5.0",
+    "esbuild": "0.28.2",
+    "prettier": "^3.9.9",
+    "rcedit": "^5.0.2",
+    "typescript": "7.0.2",
+    "vite": "8.3.1"
+  }
+}

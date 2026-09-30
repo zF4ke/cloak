@@ -1,76 +1,56 @@
-# 🧥 cloak
+<p align="center"><img src="assets/mark.svg" width="64" alt="Cloak" /></p>
+<h1 align="center">Cloak</h1>
+<p align="center">Keep Git projects outside OneDrive, with folder links where you work.</p>
+<p align="center"><a href="https://github.com/zF4ke/cloak/releases/latest">Download for Windows</a> / <a href="docs/projects.md">Project guide</a> / <a href="docs/cli.md">CLI</a> / <a href="docs/development.md">Development</a></p>
 
-**Pause OneDrive while you work. Let it sync when you step away.**
+![Cloak project manager](docs/images/projects.png)
 
-Keeping code in a OneDrive folder breaks things: files turn into cloud
-placeholders mid-build (`not a regular file`), long-running processes read
-stale content, sync locks files while you compile. cloak fixes it the simple
-way: OneDrive shouldn't touch your project while you're working on it.
+OneDrive can duplicate source files and corrupt Git metadata while syncing an active repository. Cloak stores the real folder outside OneDrive, uses GitHub for commits, and leaves an optional directory junction in your familiar Projects folder. Editors and terminals can open it normally. The original pause/resume tool remains available for ordinary OneDrive projects.
 
-A small daemon watches your project folders. Activity stops OneDrive (silently,
-by ending its process so it releases your files). Once everything is quiet for a
-bit, OneDrive restarts and syncs as normal.
+## Get started
 
-## Install
+1. Download the installer from [Releases](https://github.com/zF4ke/cloak/releases/latest). It installs for your Windows account without Node or administrator access.
+2. Install [Git for Windows](https://git-scm.com/downloads/win) and [GitHub CLI](https://cli.github.com/). Run `gh auth login` and `gh auth setup-git`.
+3. Open Settings and choose the real project root outside OneDrive and the Projects folder where you want links.
+4. Use Add existing for a local folder, Clone repository for another PC's project, or New project to create one. Review the paths before finishing.
 
-```powershell
-git clone https://github.com/zF4ke/cloak.git
-cd cloak
-pwsh -File install.ps1
-```
+Repositories default to private. Imports include `.git` and ignored local files. Existing destinations are never overwritten. [The project guide](docs/projects.md) explains setup and recovery.
 
-The installer asks for your projects folder, writes the config, registers the
-daemon to start at logon, and adds a `cloak` command to your PATH. Open a new
-terminal to use it.
+## Keep projects current
 
-## Commands
+Cloak fetches at startup and every five minutes by default. Closing the window keeps it in the tray. Enable Launch at Windows sign-in to check after a restart. Choose Quit from the tray to stop checks.
 
-```
-cloak status              daemon / task / OneDrive state + recent log
-cloak install             install or repair, add cloak to PATH
-cloak uninstall           remove the daemon and PATH entry
-cloak start | stop        start / stop the daemon
-cloak log [-Follow]       show the daemon log
-cloak probe               test how OneDrive treats junctions here
+| Local branch           | Automatic behavior                                   |
+| ---------------------- | ---------------------------------------------------- |
+| Same commits as origin | Keep local edits.                                    |
+| Ahead of origin        | Keep commits and edits.                              |
+| Diverged               | Keep everything and report that Git needs attention. |
+| Strictly behind origin | Apply the chosen local-edit policy.                  |
 
-cloak on <path>           manually hide a folder from OneDrive (junction mode)
-cloak off <path>          restore it
-cloak list                show junction-cloaked folders
-cloak restore-all         restore all of them
-```
+**The default policy replaces uncommitted edits when a branch is strictly behind.** It also removes nonignored untracked files. Ignored files such as `.env` normally remain. Choose Keep local edits in Settings if updates should wait instead. Automatic checks never commit or push.
 
-## How it behaves
+Use Sync to publish work. Select changed files and write a commit message. Other staged files and remaining unselected edits block Sync. See [Updates and Sync](docs/projects.md#updates-and-sync).
 
-- Watches the filesystem, not your apps. Works with any editor, terminal, or agent.
-- Never moves or touches your folders. Uninstall and everything is as it was.
-- Resumes OneDrive briefly every 45 min even during long sessions, so backups stay fresh.
-- Always restarts OneDrive on exit. A crash just means plain OneDrive behavior again.
+## What you can do
 
-If Files-On-Demand is turning your files into placeholders, turn it off or set
-your project folders to "Always keep on this device". The installer checks and
-warns you about this.
+- Create GitHub repositories, import whole projects and clone repositories.
+- Inspect changes, open folders or GitHub, repair missing links and remove entries without deleting files.
+- Use the same project engine from the [CLI](docs/cli.md).
+- Keep the original [OneDrive protection](docs/protection.md), log and temporary junction controls.
+- Install updates without replacing settings or the project list.
 
-## Configuration
+Microsoft does not support syncing symlinks or junctions with OneDrive. Cloak uses junctions at the owner's request and cannot guarantee that every OneDrive version ignores linked contents. Each PC needs its own clone and link. Read [the folder-link decision](docs/adr/002-folder-links.md).
 
-`config.jsonc`:
+## Guides
 
-| setting | default | meaning |
-|---|---|---|
-| `watchRoots` | set by installer | folders to watch |
-| `idleSeconds` | `90` | quiet time before OneDrive resumes |
-| `settleMaxMinutes` | `30` | after a resume the watcher re-arms once OneDrive's I/O goes quiet (sync done); this caps that wait |
-| `maxPauseMinutes` | `45` | max time paused, even under constant activity |
-| `ignoreDirs` | `[]` | directory names whose activity won't pause OneDrive |
-| `ignoreFiles` | `[]` | filename globs whose activity won't pause OneDrive (e.g. `*.log`) |
-| `pollSeconds` | `5` | how often the daemon checks |
-| `scratchDir` | `%LOCALAPPDATA%\cloak\scratch` | where junction mode stashes bytes |
+| Guide                                | Contents                                               |
+| ------------------------------------ | ------------------------------------------------------ |
+| [Projects](docs/projects.md)         | Setup, repositories, updates, Sync and another PC.     |
+| [CLI](docs/cli.md)                   | Every command and examples.                            |
+| [Protection](docs/protection.md)     | Watcher, configuration, logs and manual junction mode. |
+| [Installation](docs/installation.md) | Installer, portable build, updates and uninstall.      |
+| [Architecture](docs/architecture.md) | Components, stored data and operation flow.            |
+| [Development](docs/development.md)   | Run, verify, package and release.                      |
+| [Design](docs/design.md)             | Tokens, controls, motion and references.               |
 
-Logs: `%LOCALAPPDATA%\cloak\cloakd.log`
-
-## Junction mode
-
-The `cloak on/off` commands are a separate, manual mode for when you want a
-folder *fully* invisible to OneDrive rather than just paused: it moves the
-folder to local disk and leaves a junction in its place, so nothing inside syncs
-until you `cloak off`. Run `cloak probe` first to confirm your OneDrive ignores
-junctions (it touches nothing but a throwaway folder).
+Windows x64 is the release target. Binaries are unsigned. Project checks do not install new application releases; run a new Cloak installer manually.

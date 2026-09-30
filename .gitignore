@@ -2,3 +2,8 @@
 *.log
 /state/
 /.cloak-scratch/
+node_modules/
+dist/
+release/
+tmp/
+design-skill/

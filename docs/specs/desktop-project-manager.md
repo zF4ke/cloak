@@ -1,0 +1,16 @@
+# Desktop project manager
+
+Accepted owner requirements, 30 September 2026.
+
+- Keep the existing PowerShell CLI, OneDrive pause/resume daemon and temporary junction mode. Add a Windows desktop app and a shared CLI for managed Git projects.
+- Use a compact centered near-black interface with purple accents, restrained surfaces, icons, useful space and tasteful spring motion. Theme dropdown menus with a right gutter. Setup has a connected accent-filled phase track without an initial reverse animation. Avoid excessive separators and unnecessary labels. Group each Save action with the fields it changes. Support keyboard focus and reduced motion.
+- Offer New project, Add existing and Clone repository. Use a configurable real-project root outside OneDrive and optional folder links alongside existing OneDrive projects. Folder links are specifically requested despite Microsoft's support limitation.
+- Inspect imported repositories, confirm their existing origin, and offer repository creation through GitHub CLI for new Git projects. Default the repository name from the folder and default visibility to private. Review the folder move and update policy before applying setup.
+- Move entire imported folders, including ignored local files, without replacing an existing destination. Refuse moving linked Git worktrees. Keep a recoverable local project if repository or link setup fails, with an explanation and a way to retry.
+- Show managed projects, local changes and errors. Support opening folders and GitHub repositories, restoring missing links, and removing a project from Cloak without deleting its folder or repository.
+- Explicit Sync can commit selected changed files and then pull and push. It must not silently include other staged files or overwrite remaining edits. Automatic checks never create a commit or push.
+- Check for remote commits at app startup and on an interval. A PC that was off checks when Cloak next starts. Offer Windows sign-in launch and tray operation. No permanent network listener or GitHub webhook is required.
+- Equal, ahead and diverged projects retain their local contents during automatic checks. For strictly behind branches, the owner chose to discard local edits and nonignored untracked files and use the remote version. Preserve ignored files. Offer Keep local edits as an alternative setting. Report divergence and fetch failures without forcing them.
+- A modern installer must match the app's components, palette and motion, with real progress. Install per user without requiring Node. Keep project/settings data outside the application directory and preserve it during updates or uninstall.
+- Finish clear README and guides for every capability, architecture, configuration, installation, CLI and recovery. Bundle owned artwork and source provenance. Publish a Windows release on GitHub.
+- Create a separate private skills repository containing the personal design skill, its useful reference assets, install instructions and an independent test. Preserve all durable owner feedback and product-specific decisions without requiring every future app to copy Cloak.
