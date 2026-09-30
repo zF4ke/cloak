@@ -149,7 +149,9 @@ export function Onboarding({
             onClick={() => void (step === 2 ? create() : next())}
           >
             {busy && step === 2
-              ? "Setting up"
+              ? recover
+                ? "Recovering"
+                : "Setting up"
               : step === 2
                 ? recover
                   ? "Replace and add"
@@ -372,10 +374,18 @@ export function Onboarding({
           )}
           {step === 2 && (
             <div className="review">
-              <div className="review-symbol">
-                <Icon icon={mode === "new" ? Plus : FolderOpen} />
-              </div>
+              {!recover && (
+                <div className="review-symbol">
+                  <Icon icon={mode === "new" ? Plus : FolderOpen} />
+                </div>
+              )}
               <h3>{name}</h3>
+              {recover && (
+                <Notice>
+                  Replaces all local files and unpublished commits, including
+                  ignored files. The remote repository is unchanged.
+                </Notice>
+              )}
               <dl>
                 {recover && (
                   <div>
@@ -412,12 +422,6 @@ export function Onboarding({
                   </div>
                 )}
               </dl>
-              {recover && (
-                <Notice>
-                  Replaces all local files and unpublished commits, including
-                  ignored files. The remote repository is unchanged.
-                </Notice>
-              )}
               {mode === "import" &&
                 !recover &&
                 inspection?.path !== destination && (

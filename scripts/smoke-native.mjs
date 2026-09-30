@@ -306,6 +306,7 @@ try {
     ),
     ["Broken", "https://github.com/cloak-test/project.git", "main"],
   );
+  await pause(250);
   await screenshot(native, "recovery-repository");
   await native.evaluate(
     "document.querySelector('dialog .button.primary').click()",
@@ -320,6 +321,12 @@ try {
       "document.querySelector('dialog .button.primary').textContent.trim()",
     ),
     "Replace and add",
+  );
+  assert.equal(
+    await native.evaluate(
+      "(() => {const body=document.querySelector('.modal-content').getBoundingClientRect(),warning=document.querySelector('.review .notice').getBoundingClientRect();return warning.top>=body.top&&warning.bottom<=body.bottom})()",
+    ),
+    true,
   );
   await screenshot(native, "recovery-review");
   await native.evaluate(
