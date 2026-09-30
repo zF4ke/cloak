@@ -206,8 +206,26 @@ try {
   const info = await native.evaluate("window.setup.info()");
   assert.equal(info.path, join(installation, "app"));
   await screenshot(native, "setup-welcome");
-  const result = await native.evaluate("window.setup.install()");
-  assert.equal(result.ok, true, result.error);
+  await native.evaluate(
+    "document.querySelector('.setup-action button').click()",
+  );
+  for (
+    let i = 0;
+    i < 120 &&
+    !(await native.evaluate(
+      "document.querySelector('.setup-copy h1')?.textContent==='Cloak is ready'",
+    ));
+    i++
+  )
+    await pause(250);
+  assert.equal(
+    await native.evaluate(
+      "document.querySelector('.setup-copy h1')?.textContent",
+    ),
+    "Cloak is ready",
+    await native.evaluate("document.body.innerText"),
+  );
+  await screenshot(native, "setup-ready");
   assert.ok(
     (await readFile(join(installation, "app", "Cloak.exe"))).length > 1_000_000,
   );

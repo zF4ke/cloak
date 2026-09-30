@@ -39,7 +39,7 @@ Setup collects a plan and validates resolved roots, OneDrive boundaries, reposit
 
 An update takes the process lock and reloads the registry. It fetches origin, finds the tracking branch, compares commits and applies policy. HEAD and branch are checked again before replacement. Errors attach to the individual project. Sync optionally commits selected files, requires a clean tree, pulls and pushes.
 
-Cloak's lock does not lock external Git clients or editors. Git/GitHub CLI own credentials; Cloak stores paths and settings, not tokens. The renderer has no Node access. Electron verifies its own main frame and dispatches explicit methods.
+Cloak publishes an initialized lock directory atomically, avoiding an empty lock if a process crashes during initialization. Recovery renames a dead owner's lock to a tiny `projects.recovered-<token>` record. Keeping that record prevents another stale reader from claiming a replacement live lock. These coordination records contain only a process ID and token. They are not project backups. The lock does not lock external Git clients or editors. Git/GitHub CLI own credentials; Cloak stores paths and settings, not tokens. The renderer has no Node access. Electron verifies its own main frame and dispatches explicit methods.
 
 NSIS extracts setup into temporary storage. The custom Electron installer stages application files, checks that the installed copy is closed, swaps folders and registers Windows integration. User data remains outside `app`. Uninstall targets the fixed local app directory only.
 

@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
-import { basename, join } from "node:path";
+import { join } from "node:path";
+import { spawn } from "node:child_process";
 import { Service } from "./core/service.ts";
-import { run } from "./core/commands.ts";
 async function main() {
   const service = new Service(
     process.env.CLOAK_DATA_DIR ||
@@ -13,7 +13,6 @@ async function main() {
     false,
   );
   try {
-    await service.initialize();
     const [command, argument, ...rest] = process.argv.slice(2);
     const options = new Set(rest);
     if (
@@ -31,22 +30,31 @@ async function main() {
         "restore-all",
       ].includes(command || "")
     ) {
-      console.log(
-        await run(
-          "powershell.exe",
-          [
-            "-NoProfile",
-            "-File",
-            join(service.scripts, "cloak.ps1"),
-            "-Command",
-            command!,
-            ...(argument ? ["-Arg", argument] : []),
-            ...rest,
-          ],
-          { timeout: 180_000 },
-        ),
+      const trailing = [argument, ...rest].filter(
+        (arg): arg is string => arg !== undefined,
       );
-    } else if (command === "projects") {
+      const args = [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        join(service.scripts, "cloak.ps1"),
+        "-Command",
+        command!,
+        ...trailing,
+      ];
+      process.exitCode = await new Promise<number>((resolve, reject) => {
+        const child = spawn("powershell.exe", args, {
+          stdio: "inherit",
+          windowsHide: true,
+        });
+        child.once("error", reject);
+        child.once("exit", (code) => resolve(code ?? 1));
+      });
+      return;
+    }
+    await service.initialize();
+    if (command === "projects") {
       const views = await service.projects.views();
       for (const project of views)
         console.log(

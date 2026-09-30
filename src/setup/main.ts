@@ -1,10 +1,12 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { mkdir } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { install } from "./install.ts";
-import { run } from "../core/commands.ts";
+import {
+  installedAppRunning,
+  registerDesktop,
+} from "../core/desktop-installation.ts";
 
 export async function openSetup() {
   app.setName("Cloak Setup");
@@ -88,70 +90,11 @@ export async function openSetup() {
         data,
         (percent) => view.webContents.send("setup:progress", percent),
         {
-          running: async (target) => {
-            const output = await run("powershell.exe", [
-              "-NoProfile",
-              "-NonInteractive",
-              "-Command",
-              "Get-Process Cloak -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path | ConvertTo-Json -Compress",
-            ]);
-            const paths: string | string[] = output ? JSON.parse(output) : [];
-            return (Array.isArray(paths) ? paths : [paths]).some(
-              (path) =>
-                path?.toLowerCase() === join(target, "Cloak.exe").toLowerCase(),
-            );
-          },
-          register: async (target) => {
-            if (process.env.CLOAK_SETUP_DATA_DIR) return;
-            const start = join(
-                app.getPath("appData"),
-                "Microsoft/Windows/Start Menu/Programs/Cloak",
-              ),
-              exe = join(target, "Cloak.exe");
-            await mkdir(start, { recursive: true });
-            if (
-              !shell.writeShortcutLink(join(start, "Cloak.lnk"), {
-                target: exe,
-                cwd: target,
-                icon: join(target, "resources/app/dist/assets/icon.ico"),
-              })
-            )
-              throw new Error("Could not create the Start menu shortcut.");
-            if (
-              !shell.writeShortcutLink(join(start, "Uninstall Cloak.lnk"), {
-                target: join(target, "Uninstall.exe"),
-              })
-            )
-              throw new Error("Could not create the uninstall shortcut.");
-            const key =
-              "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Cloak";
-            for (const [name, value] of Object.entries({
-              DisplayName: "Cloak",
-              DisplayVersion: app.getVersion(),
-              Publisher: "zF4ke",
-              InstallLocation: target,
-              DisplayIcon: exe,
-              UninstallString: `"${join(target, "Uninstall.exe")}"`,
-            }))
-              await run("reg.exe", [
-                "ADD",
-                key,
-                "/v",
-                name,
-                "/t",
-                "REG_SZ",
-                "/d",
-                value,
-                "/f",
-              ]);
-            await run("powershell.exe", [
-              "-NoProfile",
-              "-File",
-              join(target, "resources/app/scripts/register-cli.ps1"),
-              "-Target",
-              target,
-            ]);
-          },
+          running: installedAppRunning,
+          register: (target) =>
+            process.env.CLOAK_SETUP_DATA_DIR
+              ? Promise.resolve()
+              : registerDesktop(target, app.getVersion()),
         },
       );
       return { ok: true };

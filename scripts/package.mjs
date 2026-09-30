@@ -39,6 +39,7 @@ for (const script of [
   "desktop-control.ps1",
   "config.jsonc",
   "scripts/register-cli.ps1",
+  "scripts/register-installation.ps1",
   "scripts/uninstall-desktop.ps1",
 ])
   await copyFile(script, join(app, "scripts", script.split("/").at(-1)));
@@ -55,6 +56,6 @@ await writeFile(
 );
 await writeFile(
   join(target, "cloak.cmd"),
-  '@echo off\r\nset "ELECTRON_RUN_AS_NODE=1"\r\nset "CLOAK_SCRIPTS_DIR=%~dp0resources\\app\\scripts"\r\n"%~dp0Cloak.exe" "%~dp0resources\\app\\dist\\cli.cjs" %*\r\n',
+  '@echo off\r\nsetlocal\r\nset "ELECTRON_RUN_AS_NODE=1"\r\nset "CLOAK_SCRIPTS_DIR=%~dp0resources\\app\\scripts"\r\n"%~dp0Cloak.exe" "%~dp0resources\\app\\dist\\cli.cjs" %*\r\nexit /b %errorlevel%\r\n',
 );
 console.log(`Portable app: ${target}/Cloak.exe`);

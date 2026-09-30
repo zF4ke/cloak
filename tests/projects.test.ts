@@ -82,6 +82,59 @@ async function fixture() {
     close: () => rm(root, { recursive: true, force: true }),
   };
 }
+test("ignored local files survive changed ignore rules and block incoming tracked collisions", async () => {
+  const f = await fixture();
+  try {
+    const { project } = await f.add();
+    await writeFile(join(project.path, ".env"), "local secret");
+    await writeFile(join(f.seed, ".gitignore"), "*.sqlite\n");
+    await f.git(f.seed, "add", ".gitignore");
+    await f.git(f.seed, "commit", "-m", "change ignores");
+    await f.git(f.seed, "push");
+    await f.projects.checkUpdates();
+    assert.equal(
+      await readFile(join(project.path, ".env"), "utf8"),
+      "local secret",
+    );
+    await writeFile(join(project.path, ".gitignore"), ".env\n*.sqlite\n");
+    await writeFile(join(f.seed, ".env"), "remote content");
+    await f.git(f.seed, "add", ".env");
+    await f.git(f.seed, "commit", "-m", "track env");
+    await f.git(f.seed, "push");
+    const head = await f.git(project.path, "rev-parse", "HEAD");
+    await f.projects.checkUpdates();
+    assert.equal(
+      await readFile(join(project.path, ".env"), "utf8"),
+      "local secret",
+    );
+    assert.equal(await f.git(project.path, "rev-parse", "HEAD"), head);
+    assert.match(
+      (await f.projects.views())[0]?.update?.message ?? "",
+      /ignored local files/,
+    );
+  } finally {
+    await f.close();
+  }
+});
+test("selected names with Git wildcard characters are treated literally", async () => {
+  const f = await fixture();
+  try {
+    const { project } = await f.add();
+    await writeFile(join(project.path, "[ab].txt"), "selected");
+    await writeFile(join(project.path, "a.txt"), "unselected");
+    await assert.rejects(
+      f.projects.sync(project.id, { message: "literal", files: ["[ab].txt"] }),
+      /local changes/,
+    );
+    assert.equal(
+      await f.git(project.path, "show", "HEAD:[ab].txt"),
+      "selected",
+    );
+    await assert.rejects(f.git(project.path, "show", "HEAD:a.txt"));
+  } finally {
+    await f.close();
+  }
+});
 test("import moves the whole folder outside OneDrive and creates a transparent folder link", async () => {
   const f = await fixture();
   try {

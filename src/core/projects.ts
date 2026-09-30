@@ -146,7 +146,16 @@ export class Projects {
           return {
             ...project,
             git: await gitState(project.path, this.run),
-            linkMissing: Boolean(project.link && !(await exists(project.link))),
+            linkMissing: Boolean(
+              project.link &&
+              !(await lstat(project.link).then(
+                async (stat) =>
+                  stat.isSymbolicLink() &&
+                  resolve(await realpath(project.link!)) ===
+                    resolve(project.path),
+                () => false,
+              )),
+            ),
             update: this.updates.get(project.id),
           };
         } catch (error) {
@@ -312,6 +321,9 @@ export class Projects {
         remote: (await gitState(target, this.run).catch(() => undefined))
           ?.remote,
         addedAt: new Date().toISOString(),
+        link: settings.createLinks
+          ? join(resolve(settings.linksFolder), name)
+          : undefined,
       };
       try {
         project.link = await this.link(project);
@@ -432,7 +444,14 @@ export class Projects {
           throw new Error(
             "Other files are already staged. Include them in this commit or unstage them in Git.",
           );
-        await git("add", "--", ...commit.files);
+        await this.run("git", [
+          "--literal-pathspecs",
+          "-C",
+          project.path,
+          "add",
+          "--",
+          ...commit.files,
+        ]);
         await git("commit", "-m", commit.message.trim());
         state = await gitState(project.path, this.run);
       }
@@ -505,8 +524,41 @@ export class Projects {
       // Re-read dirty state after fetch. Editors and Git clients can change it meanwhile.
       state = await gitState(project.path, this.run);
       if (automatic && this.state.settings.behindEdits === "discard") {
-        await git("reset", "--hard", remote);
+        const ignored = (
+          await git(
+            "ls-files",
+            "--others",
+            "--ignored",
+            "--exclude-standard",
+            "--directory",
+            "-z",
+          )
+        )
+          .split("\0")
+          .filter(Boolean)
+          .map((path) => path.replace(/\/$/, ""));
+        const incoming = (
+          await git("ls-tree", "-r", "--name-only", "-z", remote)
+        )
+          .split("\0")
+          .filter(Boolean);
+        if (
+          ignored.some((local) =>
+            incoming.some(
+              (path) =>
+                path === local ||
+                path.startsWith(`${local}/`) ||
+                local.startsWith(`${path}/`),
+            ),
+          )
+        )
+          throw new Error(
+            "An incoming tracked path conflicts with ignored local files. Move those files aside before updating.",
+          );
+        // Use the current ignore rules for cleanup. Incoming .gitignore changes
+        // must not make previously ignored files eligible for deletion.
         await git("clean", "-fd");
+        await git("reset", "--hard", remote);
       } else {
         if (state.changes.length)
           throw new Error(

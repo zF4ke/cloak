@@ -1,15 +1,14 @@
-import {
-  copyFile,
-  lstat,
-  mkdir,
-  readdir,
-  rename,
-  rm,
-  stat,
-} from "node:fs/promises";
+import * as filesystem from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { inside } from "../core/paths.ts";
+
+// Electron's patched fs treats .asar archives as directories. Setup must copy
+// the actual archive bytes, including Electron's own default_app.asar.
+const { copyFile, lstat, mkdir, readdir, rename, rm, stat, realpath } = process
+  .versions.electron
+  ? (require("original-fs") as typeof import("node:fs")).promises
+  : filesystem;
 
 async function files(
   root: string,
@@ -46,6 +45,13 @@ export async function install(
     if (!inside(directory, path) || resolve(path) === resolve(directory))
       throw new Error("Invalid installation path.");
   await mkdir(directory, { recursive: true });
+  if (
+    (await realpath(directory)).toLowerCase() !==
+    resolve(directory).toLowerCase()
+  )
+    throw new Error(
+      "The installation folder must not redirect through a folder link.",
+    );
   if ((await lstat(directory)).isSymbolicLink())
     throw new Error("The installation folder must be a real local folder.");
   if (resolve(source).toLowerCase() === resolve(target).toLowerCase())
