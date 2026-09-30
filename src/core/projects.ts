@@ -216,7 +216,10 @@ export class Projects {
     if (!project) throw new Error("Project not found.");
     return structuredClone(project);
   }
-  private async link(project: ManagedProject) {
+  private async link(
+    project: ManagedProject,
+    onCreated?: (link: string) => Promise<void>,
+  ) {
     if (!this.state.settings.createLinks) return undefined;
     const folder = resolve(this.state.settings.linksFolder),
       link = join(folder, project.name);
@@ -237,6 +240,7 @@ export class Projects {
       link,
       process.platform === "win32" ? "junction" : "dir",
     );
+    await onCreated?.(link);
     return link;
   }
   async create(plan: ProjectPlan) {
@@ -336,9 +340,6 @@ export class Projects {
             root,
             remote: cloneUrl!,
             branch: plan.recovery.branch,
-            link: settings.createLinks
-              ? join(resolve(settings.linksFolder), name)
-              : undefined,
           },
           this.run,
           async () => {
@@ -348,7 +349,7 @@ export class Projects {
                 "The source repository changed. Inspect it again before recovery.",
               );
           },
-          async () => {
+          async (onLinkCreated) => {
             const project: ManagedProject = {
               id: randomUUID(),
               name,
@@ -361,7 +362,7 @@ export class Projects {
             };
             let warning: string | undefined;
             try {
-              project.link = await this.link(project);
+              project.link = await this.link(project, onLinkCreated);
             } catch (error) {
               warning = `Project recovered. Folder link failed: ${error instanceof Error ? error.message : String(error)}`;
             }

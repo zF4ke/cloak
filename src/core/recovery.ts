@@ -10,7 +10,6 @@ type Recovery = {
   root: string;
   remote: string;
   branch?: string;
-  link?: string;
 };
 
 /** Clone first, swap whole folders, register, then delete only the displaced folder. */
@@ -18,7 +17,7 @@ export async function replaceFromRemote<T extends { warning?: string }>(
   plan: Recovery,
   run: Run,
   verifySource: () => Promise<void>,
-  register: () => Promise<T>,
+  register: (onLinkCreated: (path: string) => Promise<void>) => Promise<T>,
 ): Promise<T> {
   await mkdir(plan.root, { recursive: true });
   const root = await realpath(plan.root);
@@ -26,12 +25,7 @@ export async function replaceFromRemote<T extends { warning?: string }>(
     throw new Error(
       "Recovery destination must be inside the real project folder.",
     );
-  const sourceStat = await lstat(plan.source);
-  const preserveLink = Boolean(
-    plan.link &&
-    resolve(plan.link) !== resolve(plan.source) &&
-    (await exists(plan.link)),
-  );
+  const sourceStat = await lstat(plan.source, { bigint: true });
   if (!sourceStat.isDirectory() || sourceStat.isSymbolicLink())
     throw new Error("Choose the real project folder for recovery.");
   if (resolve(await realpath(plan.source)) !== resolve(plan.source))
@@ -48,6 +42,8 @@ export async function replaceFromRemote<T extends { warning?: string }>(
     old = join(staging, "old");
   const message = (error: unknown) =>
     error instanceof Error ? error.message : String(error);
+  let freshIdentity: { dev: bigint; ino: bigint };
+  let createdLink: { path: string; dev: bigint; ino: bigint } | undefined;
   async function cleanup() {
     if (
       !inside(root, staging) ||
@@ -56,6 +52,14 @@ export async function replaceFromRemote<T extends { warning?: string }>(
     )
       throw new Error("Recovery staging folder changed. It was not deleted.");
     await rm(staging, { recursive: true });
+  }
+  async function cleanupMessage() {
+    try {
+      await cleanup();
+      return "";
+    } catch (error) {
+      return ` Temporary clone retained at ${staging}. Cleanup failed: ${message(error)}`;
+    }
   }
   // Nothing in the source changes until clone and checkout both succeed.
   try {
@@ -75,9 +79,13 @@ export async function replaceFromRemote<T extends { warning?: string }>(
       throw new Error(
         "The remote has no usable committed branch. Choose a branch before recovery.",
       );
+    freshIdentity = await lstat(fresh, { bigint: true });
     await verifySource();
+    const currentSource = await lstat(plan.source, { bigint: true });
     if (
-      (await lstat(plan.source)).isSymbolicLink() ||
+      currentSource.isSymbolicLink() ||
+      currentSource.dev !== sourceStat.dev ||
+      currentSource.ino !== sourceStat.ino ||
       resolve(await realpath(plan.source)) !== resolve(plan.source)
     )
       throw new Error("The source folder changed. Inspect it again.");
@@ -88,26 +96,40 @@ export async function replaceFromRemote<T extends { warning?: string }>(
       throw new Error(`The destination already exists: ${plan.target}`);
     await rename(plan.source, old);
   } catch (error) {
-    await cleanup().catch(() => {});
-    throw new Error(`Original folder unchanged. ${message(error)}`);
+    const retained = await cleanupMessage();
+    throw new Error(`Original folder unchanged. ${message(error)}${retained}`);
   }
   let installed = false;
   let result: T;
   try {
     await rename(fresh, plan.target);
     installed = true;
-    result = await register();
+    result = await register(async (path) => {
+      const stat = await lstat(path, { bigint: true });
+      createdLink = { path, dev: stat.dev, ino: stat.ino };
+    });
   } catch (error) {
     try {
-      if (plan.link && !preserveLink && (await exists(plan.link))) {
-        const stat = await lstat(plan.link);
+      if (createdLink && (await exists(createdLink.path))) {
+        const stat = await lstat(createdLink.path, { bigint: true });
         if (
           stat.isSymbolicLink() &&
-          resolve(await realpath(plan.link)) === resolve(plan.target)
+          stat.dev === createdLink.dev &&
+          stat.ino === createdLink.ino &&
+          resolve(await realpath(createdLink.path)) === resolve(plan.target)
         )
-          await rm(plan.link);
+          await rm(createdLink.path);
       }
-      if (installed) await rename(plan.target, fresh);
+      if (installed) {
+        const current = await lstat(plan.target, { bigint: true });
+        if (
+          current.dev !== freshIdentity.dev ||
+          current.ino !== freshIdentity.ino ||
+          current.isSymbolicLink()
+        )
+          throw new Error(`The recovered folder changed: ${plan.target}`);
+        await rename(plan.target, fresh);
+      }
       if (await exists(plan.source))
         throw new Error(`The source path is now occupied: ${plan.source}`);
       await rename(old, plan.source);
@@ -116,8 +138,8 @@ export async function replaceFromRemote<T extends { warning?: string }>(
         `Recovery failed: ${message(error)} Original files retained at ${old}. Restore failed: ${message(rollback)}`,
       );
     }
-    await cleanup().catch(() => {});
-    throw new Error(`Original folder restored. ${message(error)}`);
+    const retained = await cleanupMessage();
+    throw new Error(`Original folder restored. ${message(error)}${retained}`);
   }
   try {
     await cleanup();

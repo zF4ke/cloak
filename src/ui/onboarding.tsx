@@ -217,6 +217,7 @@ export function Onboarding({
               <div className="input-action">
                 <input
                   autoFocus
+                  disabled={busy}
                   value={source}
                   onChange={(event) => {
                     setSource(event.target.value);
@@ -229,7 +230,7 @@ export function Onboarding({
                 <Button
                   icon={FolderOpen}
                   aria-label="Choose project folder"
-                  disabled={!snapshot.desktop}
+                  disabled={busy || !snapshot.desktop}
                   onClick={async () => {
                     const path = await api.chooseFolder();
                     if (path) {
@@ -255,6 +256,7 @@ export function Onboarding({
                 <Toggle
                   label="Use latest remote version"
                   checked={recover}
+                  disabled={busy}
                   onChange={setRecover}
                   hint="Fresh clone. Deletes all local files and unpublished commits, including ignored files."
                 />

@@ -91,11 +91,13 @@ export function Toggle({
   onChange,
   label,
   hint,
+  disabled,
 }: {
   checked: boolean;
   onChange(value: boolean): void;
   label: string;
   hint?: string;
+  disabled?: boolean;
 }) {
   const reduced = useReducedMotion();
   return (
@@ -107,6 +109,7 @@ export function Toggle({
       <button
         id={`toggle-${label.replace(/\s/g, "-")}`}
         type="button"
+        disabled={disabled}
         className="toggle"
         role="switch"
         aria-checked={checked}

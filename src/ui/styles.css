@@ -829,8 +829,11 @@ select {
   background: #101010;
   color: var(--text);
   box-shadow: 0 24px 80px #0009;
-  overflow: auto;
-  scrollbar-gutter: stable;
+  overflow: hidden;
+}
+.modal[open] {
+  display: flex;
+  flex-direction: column;
 }
 .modal::backdrop {
   background: #0009;
@@ -838,6 +841,7 @@ select {
   animation: backdrop-in 0.16s ease-out;
 }
 .modal-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -849,6 +853,9 @@ select {
   letter-spacing: -0.2px;
 }
 .modal-content {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 10px 20px 18px;
 }
 .modal-content > p {
@@ -856,13 +863,12 @@ select {
   color: var(--muted);
 }
 .modal-footer {
+  flex-shrink: 0;
   display: flex;
   justify-content: space-between;
   gap: 10px;
   padding: 13px 20px 16px;
   background: #101010;
-  position: sticky;
-  bottom: 0;
 }
 .modal.wide {
   width: min(580px, calc(100vw - 40px));

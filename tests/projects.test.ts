@@ -12,7 +12,7 @@ import {
   rename,
   readdir,
 } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { Projects } from "../src/core/projects.ts";
 import { gitState } from "../src/core/git.ts";
@@ -820,6 +820,171 @@ test("a link collision after cloning keeps the recovered project registered and 
     await rm(link, { recursive: true });
     await projects.repairLink(result.project.id);
     assert.equal(await realpath(link), result.project.path);
+  } finally {
+    await f.close();
+  }
+});
+
+test("recovery refuses a different unreadable folder substituted during cloning", async () => {
+  const f = await recoveryFixture();
+  try {
+    await writeFile(join(f.source, ".git", "index"), "");
+    const previous = join(f.cloud, "previous");
+    const execute: Run = async (command, args, options) => {
+      const result = await f.execute(command, args, options);
+      if (command === "git" && args[0] === "clone") {
+        await rename(f.source, previous);
+        await mkdir(join(f.source, ".git"), { recursive: true });
+        await writeFile(join(f.source, "sentinel"), "different folder");
+      }
+      return result;
+    };
+    const projects = new Projects(
+      join(f.root, "state"),
+      f.settings,
+      [f.cloud],
+      execute,
+    );
+    await assert.rejects(
+      projects.create({
+        mode: "import",
+        name: "project",
+        source: f.source,
+        repository: f.url,
+        visibility: "private",
+        useRemote: true,
+        createRepository: false,
+        recovery: { confirmed: true, branch: "main" },
+      }),
+      /Original folder unchanged.*source folder changed/,
+    );
+    assert.equal(
+      await readFile(join(f.source, "sentinel"), "utf8"),
+      "different folder",
+    );
+    assert.equal(await readFile(join(previous, ".git", "index"), "utf8"), "");
+    assert.deepEqual(await readdir(f.local), []);
+  } finally {
+    await f.close();
+  }
+});
+
+test("registration rollback retains a folder link created by another process during cloning", async () => {
+  const f = await recoveryFixture();
+  try {
+    const settings = { ...f.settings, linksFolder: join(f.cloud, "links") };
+    const link = join(settings.linksFolder, "project");
+    const target = join(f.local, "project");
+    await mkdir(settings.linksFolder);
+    await writeFile(join(f.source, ".git", "index"), "");
+    const execute: Run = async (command, args, options) => {
+      const result = await f.execute(command, args, options);
+      if (command === "git" && args[0] === "clone") {
+        await symlink(
+          target,
+          link,
+          process.platform === "win32" ? "junction" : "dir",
+        );
+        await mkdir(join(f.root, "state", "projects.json"));
+      }
+      return result;
+    };
+    const projects = new Projects(
+      join(f.root, "state"),
+      settings,
+      [f.cloud],
+      execute,
+    );
+    await assert.rejects(
+      projects.create({
+        mode: "import",
+        name: "project",
+        source: f.source,
+        repository: f.url,
+        visibility: "private",
+        useRemote: true,
+        createRepository: false,
+        recovery: { confirmed: true, branch: "main" },
+      }),
+      /Original folder restored/,
+    );
+    assert.equal((await lstat(link)).isSymbolicLink(), true);
+    assert.equal((await lstat(f.source)).isSymbolicLink(), false);
+    assert.equal(await readFile(join(f.source, ".git", "index"), "utf8"), "");
+  } finally {
+    await f.close();
+  }
+});
+
+test("failed clone reports retained staging when cleanup refuses a redirected folder", async () => {
+  const f = await recoveryFixture();
+  try {
+    await writeFile(join(f.source, ".git", "index"), "");
+    let retained = "";
+    const execute: Run = async (command, args, options) => {
+      if (command === "git" && args[0] === "clone") {
+        const fresh = args.at(-1)!;
+        const staging = dirname(fresh);
+        retained = `${staging}.held`;
+        await mkdir(fresh);
+        await writeFile(join(fresh, "sentinel"), "retained partial clone");
+        await rename(staging, retained);
+        await symlink(
+          retained,
+          staging,
+          process.platform === "win32" ? "junction" : "dir",
+        );
+        throw new Error("fixture clone failed");
+      }
+      return f.execute(command, args, options);
+    };
+    const projects = new Projects(
+      join(f.root, "state"),
+      f.settings,
+      [f.cloud],
+      execute,
+    );
+    await assert.rejects(
+      projects.create({
+        mode: "import",
+        name: "project",
+        source: f.source,
+        repository: f.url,
+        visibility: "private",
+        useRemote: true,
+        createRepository: false,
+        recovery: { confirmed: true, branch: "main" },
+      }),
+      /Original folder unchanged.*clone failed.*Temporary clone retained at .*Cleanup failed/,
+    );
+    assert.equal(
+      await readFile(join(retained, "fresh", "sentinel"), "utf8"),
+      "retained partial clone",
+    );
+    assert.equal(await readFile(join(f.source, ".git", "index"), "utf8"), "");
+  } finally {
+    await f.close();
+  }
+});
+
+test("discarding the displaced folder does not traverse its nested directory links", async () => {
+  const f = await recoveryFixture();
+  try {
+    const external = join(f.root, "external-data");
+    await mkdir(external);
+    await writeFile(join(external, "sentinel"), "keep external data");
+    await symlink(
+      external,
+      join(f.source, "linked-data"),
+      process.platform === "win32" ? "junction" : "dir",
+    );
+    await writeFile(join(f.source, ".git", "index"), "");
+    await f.recover();
+    assert.equal(
+      await readFile(join(external, "sentinel"), "utf8"),
+      "keep external data",
+    );
+    assert.deepEqual(await readdir(f.local), ["project"]);
   } finally {
     await f.close();
   }

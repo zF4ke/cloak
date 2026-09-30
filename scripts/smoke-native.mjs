@@ -291,7 +291,15 @@ try {
   await native.evaluate(
     "document.querySelector('dialog .button.primary').click()",
   );
-  await pause(600);
+  for (
+    let i = 0;
+    i < 60 &&
+    !(await native.evaluate(
+      "document.querySelectorAll('dialog input').length === 3",
+    ));
+    i++
+  )
+    await pause(100);
   assert.deepEqual(
     await native.evaluate(
       "[...document.querySelectorAll('dialog input')].map(i=>i.value)",
