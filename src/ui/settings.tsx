@@ -39,7 +39,10 @@ export function SettingsView({
   }
   async function choose(key: "projectsFolder" | "linksFolder") {
     try {
-      const path = await api.chooseFolder();
+      const path = await api.chooseFolder({
+        path: draft[key],
+        location: key === "linksFolder" ? "onedrive" : "projects",
+      });
       if (path) set(key, path);
     } catch (error) {
       setError(message(error));

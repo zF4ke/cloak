@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 await build({
   entryPoints: [
     "tests/projects.test.ts",
+    "tests/folder-picker.test.ts",
     "tests/install.test.ts",
     "tests/lock.test.ts",
     "tests/package.test.ts",
@@ -24,6 +25,7 @@ const result = spawnSync(
   [
     "--test",
     "dist/tests/projects.test.cjs",
+    "dist/tests/folder-picker.test.cjs",
     "dist/tests/install.test.cjs",
     "dist/tests/lock.test.cjs",
     "dist/tests/package.test.cjs",

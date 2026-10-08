@@ -116,7 +116,10 @@ export type CloakApi = {
   forget(id: string): Promise<void>;
   openProject(id: string): Promise<void>;
   openRepository(id: string): Promise<void>;
-  chooseFolder(): Promise<string | undefined>;
+  chooseFolder(options?: {
+    path?: string;
+    location?: "projects" | "onedrive";
+  }): Promise<string | undefined>;
 };
 export type LockingApp = {
   pid: number;

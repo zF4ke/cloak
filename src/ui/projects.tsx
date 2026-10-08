@@ -494,7 +494,10 @@ function FolderDialog({
         onClick={async () => {
           setBrowseError("");
           try {
-            const selected = await api.chooseFolder();
+            const selected = await api.chooseFolder({
+              path,
+              location: "projects",
+            });
             if (selected) setPath(selected);
           } catch (error) {
             setBrowseError(message(error));

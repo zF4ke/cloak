@@ -4,6 +4,7 @@ import { Projects } from "./projects.ts";
 import { Protection } from "./protection.ts";
 import { FolderUnlocker } from "./folder-locks.ts";
 import { run as execute, type Run } from "./commands.ts";
+import { folderPickerPath } from "./folder-picker.ts";
 import type { CloakApi, Snapshot, Settings } from "../shared/types.ts";
 
 export class Service {
@@ -20,7 +21,9 @@ export class Service {
     private hooks: {
       openPath?: (path: string) => Promise<void>;
       openUrl?: (url: string) => Promise<void>;
-      chooseFolder?: () => Promise<string | undefined>;
+      chooseFolder?: (
+        defaultPath: string | undefined,
+      ) => Promise<string | undefined>;
       login?: (enabled: boolean) => void;
     } = {},
   ) {
@@ -209,8 +212,27 @@ export class Service {
         if (!state.remote) throw new Error("No repository is connected.");
         return this.hooks.openUrl?.(browserRepository(state.remote));
       }
-      case "chooseFolder":
-        return this.hooks.chooseFolder?.();
+      case "chooseFolder": {
+        const options = args[0] as Parameters<CloakApi["chooseFolder"]>[0];
+        if (
+          options !== undefined &&
+          (!options ||
+            typeof options !== "object" ||
+            Array.isArray(options) ||
+            (options.path !== undefined && typeof options.path !== "string") ||
+            (options.location !== undefined &&
+              !["projects", "onedrive"].includes(options.location)))
+        )
+          throw new Error("Invalid folder picker options.");
+        const settings = this.projects.settings();
+        const fallback =
+          options?.location === "onedrive"
+            ? settings.linksFolder
+            : settings.projectsFolder;
+        return this.hooks.chooseFolder?.(
+          await folderPickerPath(options?.path, fallback),
+        );
+      }
       default:
         throw new Error("Unknown command.");
     }

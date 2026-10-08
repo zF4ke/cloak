@@ -2,6 +2,8 @@
 
 ## Choose folders and sign in
 
+Browse starts in the current folder field when it exists. Add existing and OneDrive protection fall back to the configured shortcuts folder. Change folder and local project settings fall back to the real project root. If neither exists yet, Cloak opens an existing parent folder.
+
 Open Settings. Real project folders defaults to `%USERPROFILE%\Projects` and must resolve outside detected OneDrive roots. Shortcuts folder receives optional Windows .lnk folder shortcuts. Keep your existing OneDrive www/Projects folder here so ordinary projects still sync. Explorer opens each shortcut; editors and terminals use the real local project path. Changing these roots affects new projects; it does not move existing entries.
 
 Install Git and GitHub CLI. Run `gh auth login` and `gh auth setup-git` in a terminal. Git also needs your name and email for commits. Settings shows the active GitHub CLI account.

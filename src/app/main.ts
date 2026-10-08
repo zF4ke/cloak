@@ -43,9 +43,10 @@ else {
             if (error) throw new Error(error);
           },
           openUrl: (url) => shell.openExternal(url),
-          chooseFolder: async () => {
+          chooseFolder: async (defaultPath) => {
             const result = await dialog.showOpenDialog(window!, {
               properties: ["openDirectory"],
+              defaultPath,
             });
             return result.canceled ? undefined : result.filePaths[0];
           },

@@ -331,7 +331,10 @@ export function ProtectionView({
                   icon={FolderOpen}
                   aria-label="Choose folder to cloak"
                   onClick={async () => {
-                    const selected = await api.chooseFolder();
+                    const selected = await api.chooseFolder({
+                      path: path || draft.watchRoots[0],
+                      location: "onedrive",
+                    });
                     if (selected) setPath(selected);
                   }}
                 />

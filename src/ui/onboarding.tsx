@@ -241,7 +241,10 @@ export function Onboarding({
                   aria-label="Choose project folder"
                   disabled={busy || !snapshot.desktop}
                   onClick={async () => {
-                    const path = await api.chooseFolder();
+                    const path = await api.chooseFolder({
+                      path: source,
+                      location: "onedrive",
+                    });
                     if (path) {
                       setSource(path);
                       setInspection(undefined);
