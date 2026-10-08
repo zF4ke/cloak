@@ -20,7 +20,7 @@ export async function gitState(path: string, run: Run): Promise<GitState> {
   );
   const entries = raw.split("\0"),
     changes: GitState["changes"] = [];
-  // execFile output is not trimmed for status: whitespace is part of its format.
+  // Preserve status whitespace because it is part of Git's format.
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i];
     if (!entry) continue;

@@ -30,6 +30,8 @@ Enter a GitHub HTTPS or SSH URL, then confirm the project name and paths. Privat
 
 ## Project controls
 
+Change folder updates a project's saved location after you move it yourself, including when its old folder is missing. Select the existing Git repository root outside OneDrive. Cloak checks the origin against the saved repository and updates its recorded shortcut. It does not move, clone or delete project files. Unrelated shortcuts and folders already managed by Cloak are refused.
+
 Click a project row to show its real folder, shortcut, repository, changes and concrete errors. Open folder launches Explorer. The repository link opens GitHub. Restore shortcut recreates a missing shortcut without replacing another entry. Remove from Cloak only removes the list entry; the folder, shortcut and GitHub repository remain.
 
 Search appears after three projects. Needs attention means an operation failed; open the row to inspect the reason.

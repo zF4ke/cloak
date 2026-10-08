@@ -192,6 +192,8 @@ export class Service {
       }
       case "repairLink":
         return this.projects.repairLink(args[0] as string);
+      case "changeFolder":
+        return this.projects.changeFolder(args[0] as string, args[1] as string);
       case "forget":
         return this.projects.forget(args[0] as string);
       case "openProject":

@@ -11,6 +11,7 @@ import {
   symlink,
   rename,
   readdir,
+  unlink,
 } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -87,6 +88,167 @@ async function fixture() {
     close: () => rm(root, { recursive: true, force: true }),
   };
 }
+test("commands retain stdout and drain stderr beyond the old buffer limit", async () => {
+  const size = 9 * 1024 * 1024;
+  const output = await run(process.execPath, [
+    "-e",
+    `process.stderr.write('y'.repeat(${size})); process.stdout.write('x'.repeat(${size}));`,
+  ]);
+  assert.equal(output.length, size);
+  assert.equal(output, "x".repeat(size));
+  assert.equal(
+    await run(process.execPath, ["-e", "process.stdout.write('  text\\r\\n')"]),
+    "  text",
+  );
+  await assert.rejects(
+    run(process.execPath, [
+      "-e",
+      "process.stderr.write('failure'); process.exitCode = 2",
+    ]),
+    /failure/,
+  );
+  await assert.rejects(
+    run(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      timeout: 100,
+    }),
+    /stopped|exited/,
+  );
+});
+
+test("change folder repairs a missing location and retargets its shortcut", async () => {
+  const f = await fixture();
+  try {
+    const { project } = await f.add();
+    const target = join(f.local, "renamed");
+    await writeFile(join(project.path, ".env"), "keep local files");
+    await rename(project.path, target);
+    await f.projects.changeFolder(project.id, target);
+    const view = (await f.projects.views())[0]!;
+    assert.equal(view.path, await realpath(target));
+    assert.equal(view.id, project.id);
+    assert.equal(view.error, undefined);
+    assert.equal(
+      await readFile(join(target, ".env"), "utf8"),
+      "keep local files",
+    );
+    assert.equal(
+      await shortcutMatches(project.link!, target, process.cwd(), run),
+      true,
+    );
+    await assert.rejects(
+      f.projects.changeFolder(project.id, f.cloud),
+      /outside OneDrive/,
+    );
+    await assert.rejects(
+      f.projects.changeFolder(project.id, join(target, "missing")),
+    );
+    assert.equal((await f.projects.views())[0]!.path, await realpath(target));
+  } finally {
+    await f.close();
+  }
+});
+
+test("change folder refuses a different origin and an unrelated shortcut", async () => {
+  const f = await fixture();
+  try {
+    const { project } = await f.add();
+    const target = join(f.local, "other");
+    await run("git", ["clone", "--branch", "main", f.remote, target]);
+    await f.git(
+      target,
+      "remote",
+      "set-url",
+      "origin",
+      "https://github.com/example/other.git",
+    );
+    await assert.rejects(
+      f.projects.changeFolder(project.id, target),
+      /existing origin/,
+    );
+    await f.git(target, "remote", "set-url", "origin", f.remote);
+    await writeFile(project.link!, "unrelated file");
+    await assert.rejects(
+      f.projects.changeFolder(project.id, target),
+      /shortcut changed/,
+    );
+    assert.equal(await readFile(project.link!, "utf8"), "unrelated file");
+    assert.equal((await f.projects.views())[0]!.path, project.path);
+  } finally {
+    await f.close();
+  }
+});
+test("change folder recreates a missing shortcut and refuses a managed destination", async () => {
+  const f = await fixture();
+  try {
+    const { project } = await f.add();
+    const target = join(f.local, "relocated");
+    await unlink(project.link!);
+    await rename(project.path, target);
+    await f.projects.changeFolder(project.id, target);
+    assert.equal(
+      await shortcutMatches(project.link!, target, process.cwd(), run),
+      true,
+    );
+    const other = join(f.local, "other");
+    await run("git", ["clone", "--branch", "main", f.remote, other]);
+    await f.projects.create({
+      mode: "import",
+      source: other,
+      name: "other",
+      useRemote: true,
+      createRepository: false,
+      visibility: "private",
+    });
+    await assert.rejects(
+      f.projects.changeFolder(project.id, other),
+      /already managed/,
+    );
+    assert.equal(
+      (await f.projects.views()).find((p) => p.id === project.id)!.path,
+      await realpath(target),
+    );
+  } finally {
+    await f.close();
+  }
+});
+test("change folder restores the shortcut when saving the registry fails", async () => {
+  const f = await fixture();
+  const registry = join(f.root, "state", "projects.json");
+  const retained = join(f.root, "registry-backup.json");
+  try {
+    const { project } = await f.add();
+    const before = await readFile(project.link!);
+    const target = join(f.local, "replacement");
+    await run("git", ["clone", "--branch", "main", f.remote, target]);
+    const execute: Run = async (command, args, options) => {
+      const result = await run(command, args, options);
+      if (command === "powershell.exe" && args.includes("-Encoded")) {
+        const request = JSON.parse(
+          Buffer.from(args.at(-1)!, "base64").toString("utf8"),
+        );
+        if (request.action === "create") {
+          await rename(registry, retained);
+          await mkdir(registry);
+        }
+      }
+      return result;
+    };
+    const projects = new Projects(
+      join(f.root, "state"),
+      f.settings,
+      [f.cloud],
+      execute,
+    );
+    await projects.initialize();
+    await assert.rejects(projects.changeFolder(project.id, target));
+    assert.deepEqual(await readFile(project.link!), before);
+    await rm(registry, { recursive: true });
+    await rename(retained, registry);
+    assert.equal((await projects.views())[0]!.path, project.path);
+  } finally {
+    await f.close();
+  }
+});
 test("ignored local files survive changed ignore rules and block incoming tracked collisions", async () => {
   const f = await fixture();
   try {

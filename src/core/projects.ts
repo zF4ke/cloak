@@ -575,6 +575,102 @@ export class Projects {
       }
     });
   }
+  async changeFolder(id: string, path: string) {
+    if (typeof id !== "string" || typeof path !== "string" || !path.trim())
+      throw new Error("Choose the existing project folder.");
+    return this.serial(async () => {
+      const previous = this.project(id);
+      const inspection = await this.inspect(await resolvedPath(path));
+      if (inspection.inOneDrive)
+        throw new Error("Choose a project folder outside OneDrive.");
+      if (!inspection.git || inspection.recovery)
+        throw new Error("Choose a readable Git repository root.");
+      for (const p of this.state.projects.filter((p) => p.id !== id)) {
+        const managed = await resolvedPath(p.path);
+        if (inside(managed, inspection.path))
+          throw new Error("This folder is already managed by Cloak.");
+        if (inside(inspection.path, managed))
+          throw new Error("This folder contains another managed project.");
+      }
+      if (previous.remote && inspection.git.remote !== previous.remote)
+        throw new Error(
+          "Choose a folder with the project's existing origin repository.",
+        );
+      if (previous.legacyLink)
+        throw new Error(
+          "Restore the legacy shortcut before changing the folder.",
+        );
+      const project = {
+        ...previous,
+        path: inspection.path,
+        remote: inspection.git.remote,
+      };
+      let backup: Buffer | undefined;
+      let replacement: Buffer | undefined;
+      let replaced = false;
+      const temporary = previous.link
+        ? `${previous.link}.${randomUUID()}.lnk`
+        : undefined;
+      try {
+        if (previous.link) {
+          if (await exists(previous.link)) {
+            if (
+              !(await shortcutMatches(
+                previous.link,
+                previous.path,
+                this.scripts,
+                this.run,
+              ))
+            )
+              throw new Error("The shortcut changed. It was not replaced.");
+            backup = await readFile(previous.link);
+          }
+          await createShortcut(
+            temporary!,
+            project.path,
+            this.scripts,
+            this.run,
+          );
+          replacement = await readFile(temporary!);
+          if (backup) {
+            if (!(await readFile(previous.link)).equals(backup))
+              throw new Error("The shortcut changed. It was not replaced.");
+            await rename(temporary!, previous.link);
+          } else {
+            await writeFile(previous.link, replacement, {
+              flag: "wx",
+            });
+          }
+          replaced = true;
+        }
+        const next = {
+          ...this.state,
+          projects: this.state.projects.map((p) => (p.id === id ? project : p)),
+        };
+        await this.store.write(next);
+        this.state = next;
+        this.updates.delete(id);
+      } catch (error) {
+        if (replaced && previous.link) {
+          try {
+            if (!(await readFile(previous.link)).equals(replacement!))
+              throw new Error(
+                "The shortcut changed after replacement. Restore it manually.",
+              );
+            if (backup) await writeFile(previous.link, backup);
+            else await unlink(previous.link);
+          } catch (rollback) {
+            throw new Error(
+              `Folder change failed: ${String(error)}. Shortcut rollback failed: ${String(rollback)}`,
+            );
+          }
+        }
+        throw error;
+      } finally {
+        if (temporary) await unlink(temporary).catch(() => {});
+      }
+    });
+  }
   async forget(id: string) {
     return this.serial(async () => {
       this.project(id);

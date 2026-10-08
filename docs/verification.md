@@ -1,5 +1,13 @@
 # Release verification
 
+## Folder changes and command output, 8 October 2026
+
+The 0.2.4 build passes. Five focused integration tests pass for command output above 8 MB, folder-location repair, shortcut replacement and recreation, origin and managed-folder refusal, and shortcut rollback after a registry failure. The full release integration run passed 65 of 66 tests with no skips. Its cloud-filter fixture failure also reproduces with the original command runner and is tracked in [issue 4](https://github.com/zF4ke/cloak/issues/4).
+
+The final full 0.2.4 native smoke run passed IPC, sandbox, dropdowns, accessibility, NSIS extraction, isolated installation and the packaged CLI. It exercised Change folder through the sandboxed preload, saved the new fixture location and inspected the success screen. A failed save retained the entered folder, with the error and actions visible at 620 x 420. Earlier attempts failed on cloud-import fixture assumptions and intermittent PowerToys File Locksmith crashes tracked in [issue 5](https://github.com/zF4ke/cloak/issues/5). Smoke profiles now configure temporary project roots before app startup. These checks used isolated local Git repositories and did not change the owner's projects or verify live OneDrive or GitHub operations.
+
+The real per-user 0.2.4 installer update passed. Its first attempt timed out during Windows PATH registration and rolled the app back. Writing PATH directly to the user registry and sending a bounded environment notification removed the stall. The rebuilt installer completed, Windows uninstall registration reports 0.2.4, and the owner's project registry, configuration and legacy state were retained byte for byte. The installed app's sandbox and Change folder preload were checked with a temporary profile.
+
 The 0.2.3 shortcut change was reviewed on 1 October 2026 against `a175f39` and [issue 3](https://github.com/zF4ke/cloak/issues/3). Standards and specification reviews are both clear after fixing legacy junction detection to inspect filesystem metadata. A regression covers a legal project name ending in `.lnk`; migration removes its junction, creates the shortcut and preserves its repository. The five owner shortcuts were created through the shared CLI and their actual Windows Shell targets were checked. Ada remained clean while OneDrive was running.
 
 Reviewed on 30 September 2026 against `08b1591` and the accepted [desktop specification](specs/desktop-project-manager.md).

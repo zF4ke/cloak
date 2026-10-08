@@ -13,6 +13,7 @@ const methods = [
   "saveProtection",
   "protectionAction",
   "repairLink",
+  "changeFolder",
   "forget",
   "openProject",
   "openRepository",

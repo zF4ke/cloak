@@ -6,6 +6,7 @@ import {
   rm,
   writeFile,
   lstat,
+  rename,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -132,6 +133,23 @@ async function screenshot(connection, name) {
   await writeFile(`tmp/native/${name}.png`, Buffer.from(result.data, "base64"));
 }
 try {
+  await mkdir(profile, { recursive: true });
+  await writeFile(
+    join(profile, "projects.json"),
+    JSON.stringify({
+      version: 1,
+      projects: [],
+      settings: {
+        projectsFolder: join(directory, "projects"),
+        linksFolder: join(directory, "links"),
+        createLinks: true,
+        autoPull: false,
+        pollMinutes: 5,
+        launchAtLogin: false,
+        behindEdits: "keep",
+      },
+    }),
+  );
   let native = await connect(resolve("release/Cloak/Cloak.exe"));
   assert.equal(
     await native.evaluate("typeof window.cloak.snapshot"),
@@ -221,6 +239,89 @@ try {
     await native.evaluate("document.body.innerText"),
   );
   await screenshot(native, "projects");
+  const reader = (
+    await native.evaluate("window.cloak.snapshot()")
+  ).projects.find((p) => p.name === "Reader");
+  const relocated = join(directory, "projects", "Reader relocated");
+  await rename(reader.path, relocated);
+  await native.call("Page.reload", {});
+  for (
+    let i = 0;
+    i < 150 &&
+    !(await native.evaluate(
+      "Boolean(document.querySelector('.project-select'))",
+    ));
+    i++
+  )
+    await pause(100);
+  await native.evaluate(
+    "[...document.querySelectorAll('.project-select')].find(b => b.textContent.includes('Reader')).click()",
+  );
+  await pause(300);
+  await native.evaluate(
+    "[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Change folder').click()",
+  );
+  await pause(300);
+  assert.match(
+    await native.evaluate("document.querySelector('dialog').innerText"),
+    /Files stay where they are/,
+  );
+  await screenshot(native, "change-folder");
+  await native.evaluate(
+    "[...document.querySelectorAll('dialog button')].find(b => b.textContent.trim() === 'Save folder').click()",
+  );
+  for (
+    let i = 0;
+    i < 150 &&
+    !(await native.evaluate(
+      "Boolean(document.querySelector('dialog .notice'))",
+    ));
+    i++
+  )
+    await pause(100);
+  assert.equal(
+    await native.evaluate("document.querySelector('dialog input').value"),
+    reader.path,
+  );
+  assert.equal(
+    await native.evaluate("Boolean(document.querySelector('dialog .notice'))"),
+    true,
+  );
+  await native.call("Emulation.setDeviceMetricsOverride", {
+    width: 620,
+    height: 420,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await pause(200);
+  await screenshot(native, "change-folder-error-small");
+  await native.call("Emulation.setDeviceMetricsOverride", {
+    width: 760,
+    height: 480,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await native.evaluate(
+    `(() => { const input = document.querySelector('dialog input'); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(relocated)}); input.dispatchEvent(new Event('input', {bubbles:true})); })()`,
+  );
+  await pause(100);
+  await native.evaluate(
+    "[...document.querySelectorAll('dialog button')].find(b => b.textContent.trim() === 'Save folder').click()",
+  );
+  for (
+    let i = 0;
+    i < 150 &&
+    (await native.evaluate("Boolean(document.querySelector('dialog[open]'))"));
+    i++
+  )
+    await pause(100);
+  assert.equal(
+    (await native.evaluate("window.cloak.snapshot()")).projects.find(
+      (p) => p.id === reader.id,
+    ).path,
+    relocated,
+  );
+  await screenshot(native, "changed-folder");
   await native.evaluate(
     "document.querySelector('.action-tile.purple').click()",
   );

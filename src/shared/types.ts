@@ -112,6 +112,7 @@ export type CloakApi = {
     path?: string,
   ): Promise<string>;
   repairLink(id: string): Promise<void>;
+  changeFolder(id: string, path: string): Promise<void>;
   forget(id: string): Promise<void>;
   openProject(id: string): Promise<void>;
   openRepository(id: string): Promise<void>;

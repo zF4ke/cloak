@@ -13,6 +13,7 @@ const methods: (keyof CloakApi)[] = [
   "saveProtection",
   "protectionAction",
   "repairLink",
+  "changeFolder",
   "forget",
   "openProject",
   "openRepository",

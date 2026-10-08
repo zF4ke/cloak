@@ -43,6 +43,7 @@ export function ProjectsView({
   const [connect, setConnect] = useState<ProjectView>(),
     [commit, setCommit] = useState<ProjectView>(),
     [forget, setForget] = useState<ProjectView>(),
+    [folder, setFolder] = useState<ProjectView>(),
     [busy, setBusy] = useState<string>(),
     [error, setError] = useState("");
   const reduced = useReducedMotion();
@@ -263,6 +264,16 @@ export function ProjectsView({
                 </div>
               )}
             </dl>
+            <Button
+              icon={FolderOpen}
+              disabled={Boolean(busy)}
+              onClick={() => {
+                setError("");
+                setFolder(detail);
+              }}
+            >
+              Change folder
+            </Button>
             {(detail.error || detail.update?.message) && (
               <Notice>{detail.error || detail.update?.message}</Notice>
             )}
@@ -381,6 +392,24 @@ export function ProjectsView({
             }}
           />
         )}
+        {folder && (
+          <FolderDialog
+            project={folder}
+            busy={busy === folder.id}
+            error={error}
+            onClose={() => setFolder(undefined)}
+            onSave={(path) =>
+              action(
+                folder.id,
+                async () => {
+                  await api.changeFolder(folder.id, path);
+                  setFolder(undefined);
+                },
+                "Project folder updated.",
+              )
+            }
+          />
+        )}
         {forget && (
           <Modal
             title={`Remove ${forget.name}?`}
@@ -412,6 +441,74 @@ export function ProjectsView({
         )}
       </AnimatePresence>
     </>
+  );
+}
+function FolderDialog({
+  project,
+  busy,
+  error,
+  onClose,
+  onSave,
+}: {
+  project: ProjectView;
+  busy: boolean;
+  error: string;
+  onClose(): void;
+  onSave(path: string): Promise<void>;
+}) {
+  const [path, setPath] = useState(project.path),
+    [browseError, setBrowseError] = useState("");
+  return (
+    <Modal
+      title={`Change folder for ${project.name}`}
+      onClose={() => {
+        if (!busy) onClose();
+      }}
+      footer={
+        <>
+          <Button disabled={busy} onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            tone="primary"
+            busy={busy}
+            disabled={!path.trim()}
+            onClick={() => void onSave(path)}
+          >
+            Save folder
+          </Button>
+        </>
+      }
+    >
+      <label className="field">
+        Project folder
+        <input
+          value={path}
+          disabled={busy}
+          onChange={(event) => setPath(event.target.value)}
+        />
+      </label>
+      <Button
+        icon={FolderOpen}
+        disabled={busy}
+        onClick={async () => {
+          setBrowseError("");
+          try {
+            const selected = await api.chooseFolder();
+            if (selected) setPath(selected);
+          } catch (error) {
+            setBrowseError(message(error));
+          }
+        }}
+      >
+        Browse
+      </Button>
+      <p className="hint">
+        Choose this project's existing Git folder outside OneDrive. Cloak
+        updates its saved location and shortcut. Files stay where they are.
+      </p>
+      {(error || browseError) && <Notice>{error || browseError}</Notice>}
+    </Modal>
   );
 }
 function CommitDialog({
