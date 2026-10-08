@@ -614,6 +614,9 @@ select {
   line-height: 1.6;
   margin: -3px 0 13px;
 }
+.button + .hint {
+  margin-top: 8px;
+}
 .setting-row {
   display: flex;
   align-items: center;
