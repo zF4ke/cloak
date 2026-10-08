@@ -63,8 +63,8 @@ else {
       );
       await service.initialize();
       window = new BrowserWindow({
-        width: 760,
-        height: 480,
+        width: 784,
+        height: 496,
         minWidth: 620,
         minHeight: 420,
         show: false,

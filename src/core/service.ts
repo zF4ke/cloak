@@ -100,6 +100,51 @@ export class Service {
   close() {
     if (this.timer) clearInterval(this.timer);
   }
+  private async githubStatus(): Promise<Snapshot["github"]> {
+    try {
+      await this.run("gh", ["--version"]);
+    } catch {
+      return {
+        available: false,
+        error: "Install GitHub CLI to connect a repository.",
+      };
+    }
+    try {
+      await this.run("gh", [
+        "auth",
+        "status",
+        "--hostname",
+        "github.com",
+        "--active",
+      ]);
+    } catch {
+      return {
+        available: true,
+        error:
+          "GitHub CLI could not verify your sign-in. Run gh auth status --hostname github.com.",
+      };
+    }
+    try {
+      const login = (
+        await this.run("gh", [
+          "api",
+          "user",
+          "--hostname",
+          "github.com",
+          "--jq",
+          ".login",
+        ])
+      ).trim();
+      if (!login) throw new Error("No account returned.");
+      return { available: true, login };
+    } catch {
+      return {
+        available: true,
+        error:
+          "Could not read your GitHub account. Check your connection and gh auth status --hostname github.com.",
+      };
+    }
+  }
   async snapshot(): Promise<Snapshot> {
     const [projects, protection, config, gitAvailable, github] =
       await Promise.all([
@@ -110,26 +155,7 @@ export class Service {
           () => true,
           () => false,
         ),
-        this.run("gh", ["auth", "status", "--active", "--json", "hosts"]).then(
-          (raw) => {
-            const hosts = JSON.parse(raw).hosts as Record<
-              string,
-              { login: string; active: boolean; state: string }[]
-            >;
-            const account = hosts["github.com"]?.find(
-              (account) => account.active && account.state === "success",
-            );
-            return {
-              available: true,
-              login: account?.login,
-              ...(account ? {} : { error: "Sign in with gh auth login." }),
-            };
-          },
-          () => ({
-            available: false,
-            error: "Install GitHub CLI and run gh auth login.",
-          }),
-        ),
+        this.githubStatus(),
       ]);
     return {
       recoveryWarnings: [...this.projects.recoveryWarnings],

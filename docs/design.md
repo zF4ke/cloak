@@ -11,7 +11,7 @@ The app is a compact Windows utility. Use near-black backgrounds and purple for 
 | Accent            | `#b8a0fa`                    | Selection, focus and primary action. |
 | Accent ink        | `#21143d`                    | Text on accent buttons.              |
 | Body type         | Segoe UI Variable, Segoe UI  | Native text at 13 CSS px.            |
-| App window        | 760 x 480, minimum 620 x 420 | Medium centered rectangle.           |
+| App window        | 784 x 496, minimum 620 x 420 | Medium centered rectangle.           |
 | Controls          | 34 to 36 px tall             | Consistent interaction size.         |
 | Dropdown inset    | 12 px at the right           | Keep the arrow away from the edge.   |
 

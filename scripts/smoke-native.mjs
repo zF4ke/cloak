@@ -157,6 +157,24 @@ try {
   );
   assert.equal(await native.evaluate("typeof require"), "undefined");
   const initial = await native.evaluate("window.cloak.snapshot()");
+  const bounds = await native.evaluate(
+    "({width: window.innerWidth, height: window.innerHeight})",
+  );
+  assert.equal(bounds.width, 784);
+  assert.equal(bounds.height, 496);
+  let expectedLogin;
+  try {
+    expectedLogin = execFileSync(
+      "gh",
+      ["api", "user", "--hostname", "github.com", "--jq", ".login"],
+      {
+        encoding: "utf8",
+        windowsHide: true,
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    ).trim();
+  } catch {}
+  if (expectedLogin) assert.equal(initial.github.login, expectedLogin);
   assert.equal(initial.desktop, true);
   assert.equal(initial.projects.length, 0);
   assert.equal(
@@ -267,6 +285,10 @@ try {
     /Files stay where they are/,
   );
   await screenshot(native, "change-folder");
+  const helperGap = await native.evaluate(
+    "(() => { const button=[...document.querySelectorAll('dialog button')].find(b=>b.textContent.trim()==='Browse');return document.querySelector('dialog .hint').getBoundingClientRect().top-button.getBoundingClientRect().bottom; })()",
+  );
+  assert.equal(helperGap, 8);
   await native.evaluate(
     "[...document.querySelectorAll('dialog button')].find(b => b.textContent.trim() === 'Save folder').click()",
   );

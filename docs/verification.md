@@ -1,5 +1,11 @@
 # Release verification
 
+## GitHub CLI compatibility and window defaults, 8 October 2026
+
+The 0.2.5 production build passes. The full integration run passed 68 of 69 tests with no skips. The remaining cloud-provider fixture failure is tracked in [issue 4](https://github.com/zF4ke/cloak/issues/4). New regressions cover GitHub CLI without auth-status JSON support, missing CLI, sign-in and connection failures, folder-picker defaults and IPC validation.
+
+The full packaged native smoke run passed. It checks the 784 x 496 client area, account detection with the installed GitHub CLI, the 8 px button-to-helper gap, IPC, sandbox, dropdowns, accessibility, NSIS installation and the bundled CLI. The real per-user 0.2.5 update also passed and preserved the project registry, configuration and legacy state byte for byte. The installed app recognized the owner's GitHub CLI 2.76.0 account and enabled Create project on the final review step using a temporary local profile. No GitHub repository was created during verification. The portable ZIP passed its integrity and version checks.
+
 ## Folder changes and command output, 8 October 2026
 
 The 0.2.4 build passes. Five focused integration tests pass for command output above 8 MB, folder-location repair, shortcut replacement and recreation, origin and managed-folder refusal, and shortcut rollback after a registry failure. The full release integration run passed 65 of 66 tests with no skips. Its cloud-filter fixture failure also reproduces with the original command runner and is tracked in [issue 4](https://github.com/zF4ke/cloak/issues/4).
